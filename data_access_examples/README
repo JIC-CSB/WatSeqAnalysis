@@ -1,0 +1,25 @@
+Data access example code
+========================
+
+:author: Tjelvar Olsson
+
+Description
+-----------
+
+Example scripts to illustrate how WatSeq data can be accessed from the ECS object storage.
+
+Dependencies
+------------
+
+The Bash scripts depend on the dtool command line client and the Python scripts depend on the dtool Python API.
+
+These dependencies can be installed using the ``pip`` Python package manager::
+
+    pip install dtool
+    pip install dtool-ecs
+
+On the JIC cluster the dependencies can be loaded using the commands below::
+
+    source /common/software/linuxbrew/Cellar/lmod/5.9.3/lmod/5.9.3/init/bash
+    module use /common/modulefiles/Core
+    module load dtool
