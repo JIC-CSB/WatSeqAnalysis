@@ -15,7 +15,6 @@ I put a copy of it `35k_probe_set_IWGSCv1-1.txt` in this repository.
 
 ### Genotypes of accessions
 
-I got this file from Luzie Wingen. Not sure about copy restrictions.
 The file `Watkins_829acc_axiom35k_gts_hmp.txt.gz` is in this repository. Unzip before use!
 
 ### A kmer table
