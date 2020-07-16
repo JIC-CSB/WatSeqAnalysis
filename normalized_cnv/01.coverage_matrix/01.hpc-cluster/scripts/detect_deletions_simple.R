@@ -56,7 +56,7 @@ gc()
 write.csv(mat, file='mat.csv')
 saveRDS(mat, "mat.rds")
 
-#df<-getExonsDF(mat)
+df<-getExonsDF(mat)
 write.csv(df, file='df.csv')
 saveRDS(df, "df.rds")
 
