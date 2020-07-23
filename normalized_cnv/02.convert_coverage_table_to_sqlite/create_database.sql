@@ -11,12 +11,11 @@ CREATE TABLE "regions" (
 	"sd"	REAL
 );
 
-
-
-CREATE TABLE "norm_covs" (
+CREATE TABLE "covs" (
 	"reg_id"	INTEGER,
 	"line_id"	INTEGER,
-	"norm_cov"	TEXT,
+	"cov"	INTEGER,
+	"norm_cov"	REAL,
 	PRIMARY KEY (reg_id, line_id),
 	FOREIGN KEY (reg_id) REFERENCES regions (reg_id) 
             ON DELETE CASCADE ON UPDATE NO ACTION,
