@@ -1,0 +1,325 @@
+---
+output: 
+    pdf_document
+
+params: 
+    set_title: "Analysis of CNV for PPD genes"
+title: "`r params$set_title`"
+---
+
+
+
+This notebook is to include the analysis of: 
+
+1. The SD of the 823 lines
+2. Comparing the deletions from the raw coverages and from the normalized coverage (PPD1-2A)
+3. Details of clusters 5 of TraesCS4D01G040100 
+
+
+The input includes ```6,652,249```  out of  ````6,719,173```. The excluded regions have no coverage across any of the lines. 
+
+```sh 
+ruby meltMat.rb -f /Users/ramirezr/Documents/WatSeq/Deletions/20200724/200bp
+Done iteration
+Mat: 6652249
+DF: 6652249
+Cov: 6719173
+```
+
+```{r, results='hide',message=FALSE, echo=FALSE}
+library("RSQLite")
+library("bio.tilling")
+library(ggplot2)
+library(gridExtra)
+library(gtable)
+library(fields)
+library(plyr)
+library(reshape2)
+library(knitr)
+
+```
+
+```{r, results='hide', message=FALSE, echo=FALSE}
+getExonsDFFromDB <- function(covs_db){
+    query <- "SELECT 
+chrom as Scaffold, 
+chromStart as Start, 
+chromEnd as Ends, 
+reg_id as Exon, 
+chromEnd - chromStart as ExonL, 
+sd as sdExon 
+FROM 
+regions "
+    res <- dbSendQuery(covs_db,query)
+    df  <- dbFetch(res, n = -1)
+    df 
+}
+
+getLinesFromDB<-function(convs_db){
+    query <- "SELECT * from  lines"
+    res   <- dbSendQuery(covs_db,query)
+    dbFetch(res, n = -1)
+}
+
+plotHistogram<-function(table,
+                        column="size_cds",
+                        probs = c( 0.1, 0.25, 0.5, 0.75, 0.9, 0.95),
+                        binwidth=0.1, trim_range=T, title_prefix ="", force_range=c(), filter_zero = TRUE){
+    if(filter_zero){
+       table<-table[table[,column]>0,] 
+    }
+    
+    quantiles <- data.frame(quantile(table[,column], prob=probs,na.rm=TRUE, include.lowest=TRUE), stringsAsFactors=FALSE)
+    quantiles$quant<-rownames(quantiles)
+    colnames(quantiles)<-c("value", "quant")
+    values<-quantiles$values
+    local_mean<-mean(table[,column],na.rm=TRUE)
+    local_sd<-sd(table[,column],na.rm=TRUE)
+    local_max <-  max(table[,column],na.rm = T)
+    p <- ggplot(table, aes_string(column))
+    if(nrow(table) > 100){
+        table <- within(table,
+           quantile <- as.integer(
+               cut(table[,column],
+                   unique(quantile(table[,column],
+                    prob=probs,
+                    na.rm=TRUE,
+                    include.lowest=TRUE))
+                   )
+               ))
+        table$quantile<-ifelse(is.na(table$quantile),0,table$quantile)
+        table$quantile<-as.factor(table$quantile)
+        
+        if(length(force_range) == 2){
+           xmin <- force_range[1]
+           xmax <- force_range[2]
+        }else{
+            
+            iq <- quantiles$value[4] - quantiles$value[2]
+            xmax <- quantiles$value[3] + (iq * 2)
+            xmin <- quantiles$value[3] - (iq * 2)
+            if(xmin < 0) xmin <- 0
+            if(xmax > local_max)  xmax <- local_max + 1
+        }
+        
+        p <- ggplot(table, aes_string(column, fill="quantile"))
+        p <- p + geom_vline(data=quantiles,aes(xintercept=quantiles$value) )
+        for(i in seq(1,nrow(quantiles))){
+            x_pos<-quantiles$value[i]
+            gtext <- textGrob(quantiles$quant[i], y=0.02,  gp = gpar(fontsize = 6,col = "red"))
+            p <- p + annotation_custom(gtext, xmin=x_pos, xmax=x_pos)
+        }
+       
+        p <- p +  scale_fill_brewer(palette="Dark2")
+        if(length(force_range) == 2){
+           xmin <- force_range[1]
+           xmax <- force_range[2]
+        }
+        if(trim_range){
+           p <- p  + xlim(xmin, xmax) 
+        }    
+    }
+    p <- p + geom_histogram(binwidth=binwidth, position = "identity") + theme_bw()
+    p <- p + theme(legend.position="none")
+    p <- p + ggtitle(paste0(title_prefix, "Mean: ", round(local_mean,2),
+        " SD:", round(local_sd,2),
+        " CV:", round(local_sd/local_mean, 2),
+        " Median:", round(median(table[,column],na.rm=TRUE),2),
+        " Max:", round(local_max,2),
+        " N:", nrow(table)))
+    p <- p + theme(plot.title = element_text(size=6))
+    p
+}
+
+plotDistributionOfLine<-function(cov_db, line_id=1){
+    query = paste0("SELECT reg_id, norm_cov FROM norm_covs
+    WHERE line_id = ",line_id)
+    res   <- dbSendQuery(covs_db,query)
+    local_mat <- dbFetch(res, n = -1)
+    local_mat  
+}
+
+getWindowsInRange <- function(db, chr="chr3A_part2", start=192557156 , end=192583886){
+    inner_query <- paste0("SELECT *
+	FROM REGIONS 
+	WHERE
+	regions.chrom = '", chr,"' 
+	and ( regions.chromStart BETWEEN ", start," and ", end, "  OR
+	regions.chromEnd BETWEEN  ", start," and ", end, ")")
+    
+    query <- paste0("SELECT chrom, chromStart, chromEnd, line, cov, norm_cov FROM 
+(
+SELECT * FROM covs 
+WHERE covs.reg_id 
+in (
+	SELECT reg_id FROM (", inner_query,")
+	
+ ) 
+) as  n_cov
+JOIN 
+lines on n_cov.line_id = lines.line_id
+JOIN (
+    ", inner_query,"
+)as  regs ON regs.reg_id = n_cov.reg_id
+ORDER BY chrom, chromStart, chromEnd, line
+;")
+    res <- dbSendQuery(db,query)
+    df  <- dbFetch(res, n = -1)
+    df 
+}
+
+plotLibraryOnChromosomeInterval <- function(covs_df,  lines=c("WATDE0027") , title="Normalised coverage", col = "cov" ){
+    chrom <- unique(covs_df$chrom)
+    from <- min(covs_df$chromStart)
+    to <- max(covs_df$chromEnd)
+	plot_Data <- ddply(covs_df, .(chromStart), mutate, Q1=quantile(cov, 1/4), Q3=quantile(cov, 3/4), IQR=Q3-Q1, upper.limit=Q3+1.5*IQR, lower.limit=Q1-1.5*IQR)
+    plot_Data$position <- factor(plot_Data$chromStart)
+    lines_plot_data<-subset(plot_Data, line %in% lines )
+	gg <- ggplot(plot_Data, aes_string(x="position", y=col))
+	gg <- gg + geom_boxplot(outlier.shape = ".")
+	gg <- gg + geom_line(data=lines_plot_data,  aes_string(x="position", y=col,group="line", colour="line"))
+	 gg <- gg + ggtitle(paste(title,"\n", chrom,":",from, "-", to))
+     gg <- gg + theme_bw()
+     gg <- gg + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+	 gg
+    #head(plot_Data)
+}
+
+```
+
+## Distribution of the SD across all the lines. 
+
+To prepare the ```libSD.csv.gz``` I used the following command: 
+
+
+```sh
+gunzip -c libSD.csv.gz |
+  sed -e s/\"\",\"x\"/\"line\",\"SD\"/ -e s/merge\.rmdup\.// > libSD_short.csv
+```
+The following plot shows the distirbution of the Standard Deviation after the normalization of all the samples. 
+As none of the samples goes above 0.5, we can find coverages changes in leves of 0x, 1X, 2X, 3X.
+
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE,  fig.align="center", out.height="230px"}
+libsd <- read.csv("~/Documents/WatSeq/Deletions/20200724/200bp/libSD_short.csv")
+plotHistogram(libsd, column = "SD", force_range=c(0.2,0.4), binwidth=0.01)
+```
+
+\pagebreak
+
+## Comparing the deletions from the raw coverages and from the normalized coverage (PPD1-2A)
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE, out.height="150px", fig.align="center"}
+covs_db = dbConnect(drv=RSQLite::SQLite(), dbname="~/Documents//WatSeq/Deletions/20200724/200bp/long_tables/covs_200bp.db")
+
+#norm_cov_ppda1 <- getWindowsInRange(covs_db,  chr="chr2A_part1", start=36931000 , end=36943300)
+
+
+cov_ppda1 <- getWindowsInRange(covs_db,  chr="chr2A_part1", start=36931000 , end=36943300)
+
+
+```
+This is the distribution of all coverages in the region ```chr2A_part1:36931000-36943300```. 
+The windows on the normalised table are not the same as in the ppd example in the XLS file, 
+as the window size is different and we only consider +/- 2kpb around the gene model. 
+The plots in the top contains all the normalised values for all the windows in the range.
+The plots on the bottom is the distribution of the values on lines ```WATDE0027```, ```WATDE0164``` and ```WATDE0165```, 
+which are in the cluster 1 of TraesCS2A01G081900.Ppd-1.png, but have a longer deletion than the rest of of the values. 
+We are including also ```WATDE0141``` as it was previously requested by Simon. However, the new candidate is ```B1190729.1``` (also called  ```WATDE0100```,  ```1190729-1```) 
+On the left, the values normalized by line and window. On the right, the raw data from the excel file with PPD1-2A. 
+In the case of line ```WATDE0141```, has some coverage. Before the latest normalisation, this case was going up to 3X. 
+However, the method removing all the 0 values make it be close to ```0.5``` coverage, not quite a deletion. This may need validation in the lab. 
+
+As for line ```B1190729.1``` , there is a secondary deletion around ```36,939,080```, just affter the region with lowe coverage in the rest of the lines.
+
+
+
+```{r,echo=FALSE, warning=FALSE, fig.align="center"}
+
+p1 <- plotHistogram(cov_ppda1, column="norm_cov", trim_range=T,  filter_zero=FALSE) 
+lines2 <- c("WATDE0027", "WATDE0164", "WATDE0165", "WATDE0141", "WATDE0018", "B1190729.1")
+covs_lines_2 <- cov_ppda1[cov_ppda1$line %in% lines2, ]
+
+p2 <- plotHistogram(covs_lines_2, column="norm_cov", trim_range=T,  filter_zero=FALSE) 
+
+
+p3 <- plotHistogram(cov_ppda1, column="cov", trim_range=T,  filter_zero=FALSE, binwidth=1) 
+p3 <- p3 + xlab("Coverage")
+
+covs_lines_2 <- cov_ppda1[cov_ppda1$line %in% lines2, ]
+p4 <- plotHistogram(covs_lines_2, column="cov", trim_range=T,  filter_zero=FALSE, binwidth=1) 
+p4 <- p4 + xlab("Coverage")
+multiplot(p1, p2,p3,p4, cols=2)
+```
+
+
+\pagebreak
+
+To explore in more detail those three lines, we had a look at three lines that seemed to have a longer deletion than the rest of the lines.
+ On the normalised example, the second, smaller deletion, is reduces. 
+ The coverage distribution of the secondary deletion suggests that across all the lines there is a low amplification, but consistent across
+ all the lines. This suggests that this deletion is likely to be artificial. However, it would be intresting to validate it. 
+
+```{r,echo=FALSE, warning=FALSE, fig.align="center", out.height="250px"}
+
+p1 <- plotLibraryOnChromosomeInterval(cov_ppda1, lines=lines2,title = "Normalised coverage", col="norm_cov" ) + coord_cartesian(ylim=c(0,4) )
+p1 <- p1 + theme(legend.position="bottom")
+p2 <- plotLibraryOnChromosomeInterval(cov_ppda1, lines=lines2, title = "Original coverage", col="cov" ) + coord_cartesian(ylim=c(0,100) )
+p2 <- p2 + theme(legend.position="bottom")
+# # #multiplot(p2, p1, cols=1)
+p1
+p2
+
+```
+
+\pagebreak
+
+## Details of cluster 5 of TraesCS4D01G040100 
+
+Finally, looking at the plots we found that for ```TB1-4D```, clusters 4 and 5 seem to have a duplication. 
+For those, I don't have the values from the 100bp bins as with ```PPD1-2A```.  
+Hence, I only plotted the values for the normalisations we'd ben producing. From the 6 lines in cluster 5 that passed
+the filters (discussed above, to be relaxed), only ```WATDE0821``` seems to be consistently around the 2X coverage. 
+
+```{r  message=FALSE, echo=FALSE, results="hide"}
+
+lines5 <- c("WATDE0510", "WATDE0599", "WATDE0604", "WATDE0725", "WATDE0744", "WATDE0748", "WATDE0758", "WATDE0812", "WATDE0818", "WATDE0821", "Thatcher", "WATDE0018")
+
+lines5 <- c("WATDE0821", "WATDE0812")
+cov_tb1 <- getWindowsInRange(covs_db,  chr="chr4D_part1", start=18463838 - 5000 , end=18472387 + 5000)
+#cov_tb1      <- getWindowsInRange(covs_db,  chr="chr4D_part1", start=18463838 - 5000 , end=18472387 + 5000, tbl="covs", col="cov"  )
+
+p1 <- plotHistogram(cov_tb1, column="norm_cov", trim_range=T,  filter_zero=FALSE) + xlim(c(0,2))
+p2 <- plotHistogram(cov_tb1, column="cov", trim_range=F,  filter_zero=FALSE) 
+p3 <- plotHistogram(cov_tb1, column="cov", trim_range=T,  filter_zero=FALSE) 
+multiplot(p1, p2, p3, cols=2)
+```
+
+
+
+\pagebreak
+
+There are a few points that are otliers. as follows:
+
+```{r, echo=FALSE}
+tbl <- cov_tb1[cov_tb1$cov > 500,]
+kable(tbl)
+
+``` 
+
+\pagebreak
+
+
+```{r, message=FALSE, echo=FALSE, results="hide", out.height="650px"}
+p1 <- plotLibraryOnChromosomeInterval(cov_tb1, lines=lines5,  col="norm_cov" ) + coord_cartesian(ylim=c(0,4) ) 
+p1 <- p1 + theme(legend.position="bottom")
+p1
+```
+
+```{r, echo=FALSE}
+p2 <- plotLibraryOnChromosomeInterval(cov_tb1, lines=lines5, col="cov", title = "Original coverage" ) + coord_cartesian(ylim=c(0,60)) 
+p2 <- p2 + theme(legend.position="bottom")
+p2
+```
+
+
