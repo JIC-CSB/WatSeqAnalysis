@@ -94,7 +94,7 @@ normalizeCovs<-function(counts, exonsDF, remove.zero = F) {
   counts<-counts[rowsToKeep,]
   exonsDF <- exonsDF[rowsToKeep,]
 
-  counts <- as.matrix(counts)
+  #counts <- as.matrix(counts)
   if(remove.zero){
        counts<- apply(counts, 2 , function(x){ifelse(x == 0, NA, x)}) 
   }
