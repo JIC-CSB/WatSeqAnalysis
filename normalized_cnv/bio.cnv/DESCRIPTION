@@ -7,5 +7,5 @@ Depends: R (>= 3.6)
 Suggests: ggbio, GenomicRanges, GenomicFeatures, rtracklayer
 License: MIT 
 LazyData: true
-Imports: e1071, ggplot2, plyr, reshape2, sqldf, parallel, optparse, hash, RSQLite
+Imports: e1071, ggplot2, dplyr, reshape2, sqldf, parallel, optparse, hash, RSQLite, quantreg
 VignetteBuilder: knitr

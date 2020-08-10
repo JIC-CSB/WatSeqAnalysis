@@ -16,6 +16,7 @@ library(ggbio)
 library(GenomicRanges)
 library(GenomicFeatures)
 library(rtracklayer)
+library(dplyr)
 library(RSQLite)
 load_all("../bio.cnv/R", TRUE)
 sd_path <- paste0(params$data_path, "libSD_short.csv")
@@ -43,32 +44,13 @@ kable(noisy_lines)
 ```
 
 
-```{r,  message=FALSE, echo=FALSE, fig.width=7, fig.height=9}
+```{r,  message=FALSE, echo=FALSE, fig.width=7, fig.height=9,  warning=FALSE}
 
 
 gr4D <- GRanges("chr4D_part1", IRanges(18463838 - 1000000, 18472387 + 1000000))
-cov_ppda1 <- getWindowsInRange(covs_db,  ranges=gr4D)
-lines <- c("WATDE0009", "WATDE0039", "WATDE0821", "WATDE0812", "WATDE0141", "WATDE0018", "B1190729.1")
+lines2 <- c("WATDE0009", "WATDE0039", "WATDE0821", "WATDE0812", "WATDE0141", "WATDE0018", "B1190729.1")
 lines <- c("WATDE0009", "WATDE0039", "WATDE0821", "WATDE0812")
-#noisy_cov <- cov_ppda1[cov_ppda1$line %in% noisy_lines$line]
-noisy_cov <- cov_ppda1[cov_ppda1$line %in% lines]
-#kable(head(noisy_cov))
-gff_local <-  subsetByOverlaps(gff, gr4D)
-gff_local <- gff_local[gff_local$type == "gene"]
-gff_local$pos_id <- seq(from = 0, to=length(gff_local)-1)
-levels_count = 10  
-gff_local$ymin <- gff_local$pos_id %% levels_count
-gff_local$ymax <- 0.5 + (gff_local$pos_id %% levels_count)
 
-p.norm.cov <- ggplot(noisy_cov, aes(y=norm_cov, x=start, color=line)) + theme_bw() + geom_point(alpha=0.1) + theme(legend.position = "top") 
-p.genes <- ggplot(gff_local) + geom_rect(aes(xmin=start, xmax=end , ymin = ymin, ymax = ymax ), stat = "identity", color = NA) 
-p.genes <- p.genes +  geom_text(aes(x=start, y =  ymax+0.2, label = gene_id), size=2, check_overlap=T ) 
-p.genes <- p.genes + theme_bw()
-
-#position=position_jitter(width=0,height=4)
-#kable(head(gff_local$gene_id))
-tks <- tracks(norm_cov=p.norm.cov , gene = p.genes, 
-heights = c(6,2)) + xlim(gr4D)  + scale_x_sequnit(unit = "Mb" ) 
-tks
+plotRegionScatterLines(covs_db, gff, gr4D, lines=lines2)
 ```
 
