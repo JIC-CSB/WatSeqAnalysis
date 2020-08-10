@@ -283,9 +283,11 @@ the filters (discussed above, to be relaxed), only ```WATDE0821``` seems to be c
 
 ```{r  message=FALSE, echo=FALSE, results="hide"}
 
-lines5 <- c("WATDE0510", "WATDE0599", "WATDE0604", "WATDE0725", "WATDE0744", "WATDE0748", "WATDE0758", "WATDE0812", "WATDE0818", "WATDE0821", "Thatcher", "WATDE0018")
+#lines5 <- c("WATDE0510", "WATDE0599", "WATDE0604", "WATDE0725", "WATDE0744", "WATDE0748", "WATDE0758", "WATDE0812", "WATDE0818", "WATDE0821", "Thatcher", "WATDE0018")
+lines5 <- c( "WATDE0821", "WATDE0009","WATDE0039","WATDE0236")
 
-lines5 <- c("WATDE0821", "WATDE0812")
+
+#lines5 <- c("WATDE0821", "WATDE0812")
 cov_tb1 <- getWindowsInRange(covs_db,  chr="chr4D_part1", start=18463838 - 5000 , end=18472387 + 5000)
 #cov_tb1      <- getWindowsInRange(covs_db,  chr="chr4D_part1", start=18463838 - 5000 , end=18472387 + 5000, tbl="covs", col="cov"  )
 
@@ -294,7 +296,23 @@ p2 <- plotHistogram(cov_tb1, column="cov", trim_range=F,  filter_zero=FALSE)
 p3 <- plotHistogram(cov_tb1, column="cov", trim_range=T,  filter_zero=FALSE) 
 multiplot(p1, p2, p3, cols=2)
 ```
+\pagebreak
 
+```{r  message=FALSE, echo=FALSE, results="hide"}
+
+#lines5 <- c("WATDE0510", "WATDE0599", "WATDE0604", "WATDE0725", "WATDE0744", "WATDE0748", "WATDE0758", "WATDE0812", "WATDE0818", "WATDE0821", "Thatcher", "WATDE0018")
+lines5 <- c( "WATDE0821", "WATDE0009","WATDE0039","WATDE0236")
+
+
+#lines5 <- c("WATDE0821", "WATDE0812")
+cov_tb1 <- getWindowsInRange(covs_db,  chr="chr4D_part1", start=18463838 - 1000000 , end=18472387 + 1000000)
+#cov_tb1      <- getWindowsInRange(covs_db,  chr="chr4D_part1", start=18463838 - 5000 , end=18472387 + 5000, tbl="covs", col="cov"  )
+
+p1 <- plotHistogram(cov_tb1, column="norm_cov", trim_range=T,  filter_zero=FALSE) + xlim(c(0,2))
+p2 <- plotHistogram(cov_tb1, column="cov", trim_range=F,  filter_zero=FALSE) 
+p3 <- plotHistogram(cov_tb1, column="cov", trim_range=T,  filter_zero=FALSE) 
+multiplot(p1, p2, p3, cols=2)
+```
 
 
 \pagebreak

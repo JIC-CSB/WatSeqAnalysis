@@ -1,4 +1,11 @@
-getWindowsInRange <- function(db, chr="chr3A_part2", start=192557156 , end=192583886){
+getWindowsInRange <- function(db, chr="chr3A_part2", start=192557156 , end=192583886, ranges = null){
+
+    if(!is.null(ranges)){
+        chr=seqnames(ranges)[1]
+        start=start(ranges)[1]
+        end=end(ranges)[1]
+
+    }
     inner_query <- paste0("SELECT *
 	FROM REGIONS 
 	WHERE
@@ -24,5 +31,11 @@ ORDER BY chrom, chromStart, chromEnd, line
 ;")
     res <- dbSendQuery(db,query)
     df  <- dbFetch(res, n = -1)
+    if(!is.null(ranges)){
+        df <- makeGRangesFromDataFrame(df,
+                         start.field="chromStart",
+                         end.field="chromEnd", 
+                         keep.extra.columns=T )
+    }
     df 
 }
