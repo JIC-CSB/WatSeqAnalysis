@@ -16,12 +16,20 @@ author: "Ricardo H. Ramirez-Gonzalez"
 library(devtools)
 library(knitr)
 library(GenomicRanges)
-library(GenomicFeatures)
+#library(GenomicFeatures)
 library(RSQLite)
 load_all("../bio.cnv/R", TRUE)
 
 #gff<- import(params$gff_file)
 covs_db = dbConnect(drv=RSQLite::SQLite(), dbname="~/Documents//WatSeq/Deletions/20200724/200bp/long_tables/covs_200bp.db")
+```
+
+Testing that we can get all the chromosome: 
+
+```{r}
+regions <- getFullChromosomes(covs_db)
+kable(regions)
+
 ```
 
 First we want to stich all the coverages for a single group. 
@@ -46,3 +54,5 @@ dels <- getCNVInRegion(covs_db, region=gr4D, line="WATDE0812", max_gap=20, het=F
 kable(dels)
 
 ```
+
+

@@ -50,5 +50,7 @@ getCNVInRegion<-function(covs_db,
     }else {
       reduced$cnv_level <- round(reduced$norm_cov ) 
     }
+    reduced$line <- line
+    reduced$max_gap <- max_gap
     reduced
 }
