@@ -1,4 +1,4 @@
-getRegionFromDB <- function(covs_db, rename=TRUE, region = null ){
+getRegionFromDB <- function(covs_db, rename=TRUE, region = NULL ){
     query <- "SELECT 
 *
 FROM 
@@ -15,6 +15,14 @@ regions "
     if(rename){
         colnames(df) <- c("chrom", "start", "end", "reg_id", "sd")
     }
+
+    # if(!is.null(region)){
+    #     df <- makeGRangesFromDataFrame(df,
+    #                     start.field="chrom",
+    #                     end.field="start", 
+    #                     keep.extra.columns=T )
+    # }
+
     df 
 }
 
