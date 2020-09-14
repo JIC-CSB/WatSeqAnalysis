@@ -3,7 +3,7 @@ getCNVInRegion<-function(covs_db,
                                     line="",
                                     max_gap = 2,
                                     window = "", 
-                                    sd_factor = 3, 
+                                    sd_factor = 2.5, 
                                     het=TRUE
                                   ){
     
