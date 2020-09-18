@@ -47,7 +47,7 @@ kable(dels)
 dels <- getCNVInRegion(covs_db, region=gr4D, line="WATDE0039", max_gap=20, het=FALSE)
 kable(dels)
 
-dels <- getCNVInRegion(covs_db, region=gr4D, line="WATDE0821", max_gap=20, het=FALSE)
+    dels <- getCNVInRegion(covs_db, region=gr4D, line="WATDE0821", max_gap=20, het=FALSE)
 kable(dels)
 
 dels <- getCNVInRegion(covs_db, region=gr4D, line="WATDE0812", max_gap=20, het=FALSE)
@@ -56,3 +56,6 @@ kable(dels)
 ```
 
 
+```{r}
+sessionInfo()
+```

@@ -45,7 +45,7 @@ print(regions)
 missing_chunks_fn <- "missing_chunks.txt"
 
 all<- NULL
-#file.create(missing_chunks_fn, showWarnings = TRUE)
+file.create(missing_chunks_fn, showWarnings = TRUE)
 for(line in lines$line){
     output_folder<-paste0(opt$out, "/", line)
     print(line)
@@ -54,7 +54,7 @@ for(line in lines$line){
          in_f=paste0(line, "/", seqnames(region)[1], ".csv")
          #print(in_f)
          #in_f=paste0(region, ".csv")
-         in_pair = paste0(c(line,"," , seqnames(region)[1]))
+         in_pair = paste0(line,"," , as.character(seqnames(region)[1]))
          if(file.exists(in_f)){
             tmp <- read.csv(in_f)
             if(is.null(all)){
