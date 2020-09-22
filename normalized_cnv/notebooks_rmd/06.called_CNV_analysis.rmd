@@ -1,0 +1,110 @@
+---
+output: 
+    pdf_document
+
+params: 
+    set_title: "Global analysis of CNV"
+    data_path: "~/Documents/WatSeq/Deletions/20200724/200bp/"
+    gff_file: "~/Dropbox/JIC/WatSeq/Annotation/Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz"
+title: "`r params$set_title`"
+author: "Ricardo H. Ramirez-Gonzalez"
+---
+
+
+We want to explore how the details of the called CNVs
+
+```{r, message=FALSE, echo=FALSE}
+
+#params<-list()
+#params$data_path <- "~/Documents/WatSeq/Deletions/20200724/200bp/"
+#params$gff <- "~/Dropbox/JIC/WatSeq/Annotation/Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz"
+
+library(devtools)
+library(knitr)
+#library(GenomicRanges)
+library(GenomicFeatures)
+library(RSQLite)
+library(ggbio)
+library(rtracklayer)
+load_all("../bio.cnv/R", TRUE)
+gff  <- import(params$gff_file)
+
+seq_len=paste0(params$data_path, "sequence_lengths.txt")
+#levels <- c("chr1A","chr1B", "chr1D","chr2A","chr2B", "chr2D","chr3A","chr3B", "chr3D","chr4A","chr4B", "chr4D","chr5A","chr5B", "chr5D","chr6A","chr6B", "chr6D","chr7A","chr7B", "chr7D","chrUn")
+lens <- read.csv(seq_len, sep="\t", stringsAsFactors=F)
+levels <- lens$seqname
+lens$seqname<-factor(lens$seqname, levels = levels)
+
+
+#cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/all_cnv.csv.gz") 
+cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/all_cnv.csv") 
+covs_db = dbConnect(drv=RSQLite::SQLite(), dbname="~/Documents//WatSeq/Deletions/20200724/200bp/long_tables/covs_200bp.db")
+
+#cnvs_df <- read.csv(gzfile(cnvs_file))
+cnvs_df <- read.csv(cnvs_file)
+cnvs <- makeGRangesFromDataFrame(cnvs_df, keep.extra.columns=T)
+
+#without_name <- cnvs[is.na(seqnames(cnvs))]
+cnvs<-fixRangesOrder(cnvs, lens, ordr=lens$seqname)
+
+large_cnvs <- cnvs_df[cnvs_df$width > 1500,]
+
+total_dels <- nrow(cnvs_df)
+over_1500 <- nrow(large_cnvs)
+
+
+non_singletons_cnvs <- cnvs_df[cnvs_df$width > 200,]
+
+non_singletons_cnvs_gr <-  makeGRangesFromDataFrame(cnvs_df, keep.extra.columns=T)
+non_singletons_cnvs_gr<-fixRangesOrder(non_singletons_cnvs_gr, lens, ordr=lens$seqname)
+
+over_200 <- nrow(non_singletons_cnvs)
+percentage_over_200 <- 100.0 * over_200 / total_dels
+
+percentage_over_1500 <- 100.0 * over_1500 / total_dels
+lines_in_file <- unique(cnvs_df$line)
+
+```
+ 
+
+There are ```r format(total_dels, nsmall=0, big.mark=",")``` CNV events in the datasatet. 
+This analysis contains ```r length(lines_in_file)``` lines
+
+First we want to get an idea of the distribution of the deletion sizes.
+
+```{r}
+kable(head(cnvs))
+plotHistogram(cnvs_df, column="width", binwidth=200)
+
+
+```
+
+Most of them are under 1,500, however there are ```r format(over_1500, nsmall=0, big.mark="," )``` 
+larger than 1,500 (```r format(percentage_over_1500, digits=4, big.mark="," )``` %  ). 
+
+The minimum size that we have in this dataset is 200bp, so if we filter "unique" events out.
+This filter leaves ```r format(over_200, nsmall=0, big.mark="," )``` 
+(```r format(percentage_over_200, digits=4, big.mark="," )``` %) events
+The distribution is the following distribution:
+
+
+```{r}
+plotHistogram(non_singletons_cnvs, column="width", binwidth=200)
+
+```
+
+
+We want to look how one of the lines look randomly
+
+
+
+```{r,  fig.width=18, fig.height=24}
+
+plotCnvsInLine(non_singletons_cnvs_gr)
+```
+
+
+```{r,  fig.width=18, fig.height=24}
+
+plotCnvsInLine(non_singletons_cnvs_gr, cnv_level=2)
+```

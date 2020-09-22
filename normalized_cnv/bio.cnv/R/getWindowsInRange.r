@@ -1,4 +1,4 @@
-getWindowsInRange <- function(db, chr="chr3A_part2", start=192557156 , end=192583886, region = NULL, line=NULL){
+getWindowsInRange <- function(db, chr="chr3A_part2",  start=192557156 , end=192583886, region = NULL, line=NULL, as.gr=FALSE){
 
     if(!is.null(region)){
         chr=seqnames(region)[1]
@@ -34,7 +34,7 @@ ORDER BY chrom, chromStart, chromEnd, line
 
     res <- dbSendQuery(db, query)
     df  <- dbFetch(res, n = -1)
-    if(!is.null(region)){
+    if(as.gr){
         df <- makeGRangesFromDataFrame(df,
                         start.field="chromStart",
                         end.field="chromEnd", 
@@ -42,4 +42,4 @@ ORDER BY chrom, chromStart, chromEnd, line
     }
     df 
     #query
-}
+} 
