@@ -1,0 +1,548 @@
+---
+title: "Detection of copy number variation on wheat"
+author: Ricardo H. Ramirez-Gonzalez
+date: 28 Sept 2020
+output: 
+  revealjs::revealjs_presentation:
+    self_contained: true 
+    transition: fade
+    theme: solarized
+---
+
+# Detection of medium and large CNV
+
+<style type="text/css" media="screen">
+
+.left {
+  float: left;
+  width:65%;
+  z-index:-10;
+}
+
+.right {
+  
+  float: right;
+  justify-content: center;
+  display: table-cell;
+  vertical-align: middle;
+  padding-top:70px;
+  z-index:-10;
+  width:35%;
+}
+
+</style>
+
+
+
+- Copy number variations 
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+
+params<-list()
+params$data_path <- "~/Documents/WatSeq/Deletions/20200724/200bp/"
+params$gff_file <- "~/Dropbox/JIC/WatSeq/Annotation/Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz"
+params$gene_in_detail <- "TraesCS4D02G040100"
+
+
+library(devtools)
+library(knitr)
+library(GenomicRanges)
+library(GenomicFeatures)
+library(RSQLite)
+library(ggbio)
+library(plyr)
+library(dplyr) 
+library(rtracklayer)
+library(gridExtra)
+library(grid)
+library(reshape2)
+library(kableExtra)
+library(sqldf)
+
+load_all("../bio.cnv/R", TRUE)
+gff  <- import(params$gff_file)
+
+seq_len=paste0(params$data_path, "sequence_lengths.txt")
+#levels <- c("chr1A","chr1B", "chr1D","chr2A","chr2B", "chr2D","chr3A","chr3B", "chr3D","chr4A","chr4B", "chr4D","chr5A","chr5B", "chr5D","chr6A","chr6B", "chr6D","chr7A","chr7B", "chr7D","chrUn")
+lens <- read.csv(seq_len, sep="\t", stringsAsFactors=F)
+levels <- lens$seqname
+lens$seqname<-factor(lens$seqname, levels = levels)
+
+covs_db = dbConnect(drv=RSQLite::SQLite(), dbname="~/Documents//WatSeq/Deletions/20200724/200bp/long_tables/covs_200bp.db")
+gene_region <- gff[gff$gene_id %in% c(params$gene_in_detail)]
+
+cov_in_range <- getWindowsInRange(covs_db, region=gene_region)
+
+txdb <- makeTxDbFromGFF(file="~/Dropbox/JIC/WatSeq/Annotation/Triticum_aestivum.IWGSC.41.parts.tidy.gff3")
+kable_formatting <- c("striped", "hover")
+```
+
+
+# Normalisation
+
+![](images/01.CNV-pipeline_bg.png){ width=100% }
+
+```{r, message=FALSE, echo=FALSE}
+mat <- read.csv("./examples/mock_for_presentation.csv",)
+rownames(mat) <- mat[,1]
+mat[,1] <- NULL
+data_df <- getExonsDF(mat)
+mat %>% 
+kable() %>%
+kable_material(kable_formatting)
+
+```
+
+## Initial data 
+
+
+
+```{r, message=FALSE, echo=FALSE, fig.width=10, fig.height=5}
+
+p <- plotLibraryOnChromosomeInterval(cov_in_range, lines=c(), col="cov", title = "Raw coverage distribution in 200bp windows (823 samples)" ) + coord_cartesian(ylim=c(0,60)) 
+p <- p + theme(legend.position="bottom")
+p
+```
+
+> - Coverage across regions a region is not uniform
+
+# Normalisation
+
+![](images/02.CNV-pipeline_bg.png){ width=100% }
+
+$x_{i,j}=\frac{WindowCoverage_{i,j}\times10^{9}}{WindowLength_{i}\times{totalReadsSample_{j}}}$
+
+$xnorm_{i,j}=\frac{x_{i,j}}{mean(X_{i})}$
+
+
+## Normalise by sample
+
+$x_{i,j}=\frac{WindowCoverage_{i,j}\times10^{9}}{WindowLength_{i}\times{totalReadsSample_{j}}}$
+
+. . . 
+
+```{r, message=FALSE, echo=FALSE}
+
+
+totalReadsPerSample<-apply(mat,2,sum, na.rm=T)
+tmp_mat <- rbind(mat, totalReadsPerSample) 
+rownames(tmp_mat)[6] <- "totalReadsSample"
+
+tmp_mat %>% 
+kable() %>%
+kable_material(kable_formatting) %>%
+row_spec(6, bold = T, color = "#b3B3b3", background = "#534C4c")
+```
+
+## Normalisation by window 
+
+$xnorm_{i,j}=\frac{x_{i,j}}{mean(X_{i})}$
+
+. . . 
+
+```{r, message=FALSE, echo=FALSE}
+multiplier<-outer(data_df$ExonL, totalReadsPerSample )
+multiplier<-1/multiplier
+multiplier<-1000000000*multiplier
+#"RPKM-like covs"
+multiplier<-mat*multiplier
+mean.mult <- apply(multiplier, 1, mean, na.rm = T)
+tmp_mat <- cbind(multiplier, mean.mult ) 
+colnames(tmp_mat)[5] <- "Window Mean"
+tmp_mat %>% 
+kable(digits = 2,
+ format.args = list(big.mark = ",", scientific = FALSE)) %>%
+kable_material(kable_formatting) %>%
+column_spec(6, bold = T, color = "#b3B3b3", background = "#534C4c")
+#kable(multiplier)
+```
+
+## Normalised coverage
+
+```{r, message=FALSE, echo=FALSE}
+covs<-sweep(multiplier,MARGIN=1,mean.mult,'/')
+covs %>%
+kable(big.mark = ",",  digits = 2) %>%
+kable_material(kable_formatting)
+```
+
+## Normalised coverage
+
+```{r, message=FALSE, echo=FALSE, fig.width=11, fig.height=3}
+p <- plotLibraryOnChromosomeInterval(cov_in_range, lines=c(), col="cov", title = "Raw coverage distribution in 200bp windows (823 samples)" ) + coord_cartesian(ylim=c(0,60)) 
+p <- p + theme(legend.position="bottom")
+p
+```
+
+. . . 
+
+```{r, message=FALSE, echo=FALSE, fig.width=11, fig.height=3}
+p <- plotLibraryOnChromosomeInterval(cov_in_range, lines=c(), col="norm_cov", title = "Normalised coverage" ) + coord_cartesian(ylim=c(0,2)) 
+p <- p + theme(legend.position="bottom")
+p
+```
+
+
+## Second normalisation
+
+> - Remove the windows with 
+$sd(window) > 0.3$
+> - Repeat normalisation  
+> - Exclude the datapoints without coverage 
+
+
+# Watkins collection 
+
+- 823 landraces sequenced >10X coverage 
+- In collaboration with Griffiths group and  Agricultural Genomics Institute of Shenzhen (AGIS)
+- Search for CNV within genes 
+
+
+## Standard deviation of lines across samples.  
+
+::: {.left }
+```{r, message=FALSE, echo=FALSE, warning=FALSE,  fig.align="center"}
+sd_path <- paste0(params$data_path, "libSD_short.csv")
+libsd <- read.csv(sd_path)
+noisy_lines <- libsd[libsd$SD > 0.45,]
+plotHistogram(libsd, column = "SD",     binwidth=0.01, trim_range=F)
+```
+:::
+
+. . .
+
+::: {.right}
+
+``r nrow(noisy_lines)`` out of ``r nrow(libsd) `` lines are noisy ($\sigma > 0.45$). 
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE, fig.align="center"}
+noisy_lines %>% mutate_if(is.numeric, format, digits=2) %>%
+ kable( . , row.names=FALSE) %>%
+ kable_material(kable_formatting)
+```
+:::
+
+
+
+## Regular vs noisy line 
+
+
+```{r, message=FALSE, echo=FALSE,  warning=FALSE, fig.width=11, fig.height=6}
+p <- plotLibraryOnChromosomeInterval(cov_in_range, lines=c("WATDE0214"), col="norm_cov", title = "Normalised coverage" ) + coord_cartesian(ylim=c(0,2)) 
+p <- p + theme(legend.position="bottom")
+p
+```
+
+## Regular vs noisy line 
+
+
+```{r, message=FALSE, echo=FALSE,  warning=FALSE, fig.width=11, fig.height=6}
+p <- plotLibraryOnChromosomeInterval(cov_in_range, lines=c("WATDE0214","WATDE0039"), col="norm_cov", title = "Normalised coverage" ) + coord_cartesian(ylim=c(0,2)) 
+p <- p + theme(legend.position="bottom")
+p
+```
+
+## Regular line 
+
+```{r, message=FALSE, echo=FALSE,  warning=FALSE,fig.width=11, fig.height=6}
+lines <- c("WATDE0214")
+gene_region_flank <- flank(gene_region, 1500000, both=TRUE)
+plotRegionScatterLines(covs_db, gff, gene_region_flank, lines=lines, show.ribons=T, show.cov=T, genes=c(params$gene_in_detail), shape=".")
+
+```
+
+## Noisy line 
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE, fig.width=11, fig.height=6}
+lines <- c("WATDE0039")
+plotRegionScatterLines(covs_db, gff, gene_region_flank, lines=lines, show.ribons=T, show.cov=T, genes=c(params$gene_in_detail), shape=".")
+
+```
+
+## Merging continuous CNVs 
+
+```{r, message=FALSE, echo=FALSE,  warning=FALSE}
+
+cnvs_to_plot <- read.csv(file = "./examples/sample_regions.csv")
+colnames(cnvs_to_plot)[1] <- "seqnames"
+#kable(cnvs_to_plot)
+cnvs_to_plot <- makeGRangesFromDataFrame(cnvs_to_plot, keep.extra.columns = T)
+
+cnvs_to_plot_flanking <- flank(cnvs_to_plot, 300000, both=TRUE)
+
+cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/test_all_cnv.csv")
+cnvs_df <- read.csv(cnvs_file)
+
+#cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/all_cnv.csv.gz") 
+#cnvs_df <- read.csv(gzfile(cnvs_file))
+
+cnvs <- makeGRangesFromDataFrame(cnvs_df, keep.extra.columns=T)
+cnvs<-fixRangesOrder(cnvs, lens, ordr=lens$seqname)
+```
+
+- Stich individual windows with CNVs 
+- Find the extent of a variation 
+- Bridge over noisy windows 
+
+
+## CNV length distributions
+
+```{r, message=FALSE, echo=FALSE,  warning=FALSE}
+large_cnvs <- cnvs_df[cnvs_df$width > 1500,]
+
+total_dels <- nrow(cnvs_df)
+over_1500 <- nrow(large_cnvs)
+
+
+non_singletons_cnvs <- cnvs_df[cnvs_df$width > 200,]
+
+non_singletons_cnvs_gr <-  makeGRangesFromDataFrame(cnvs_df, keep.extra.columns=T)
+non_singletons_cnvs_gr<-fixRangesOrder(non_singletons_cnvs_gr, lens, ordr=lens$seqname)
+
+over_200 <- nrow(non_singletons_cnvs)
+percentage_over_200 <- 100.0 * over_200 / total_dels
+
+percentage_over_1500 <- 100.0 * over_1500 / total_dels
+lines_in_file <- unique(cnvs_df$line)
+```
+
+
+## CNV length distributions
+
+There are ```r format(total_dels, nsmall=0, big.mark=",")``` CNV events across   ```r length(lines_in_file)``` lines
+
+```{r, echo=FALSE,  warning=FALSE, message=FALSE}
+plotHistogram(cnvs_df, column="width", binwidth=200,trim_range = F) + xlim(c(0,5000))
+```
+
+
+## CNV length distributions (over 200bp)
+
+- The minimum size that we have in this dataset is 200bp ```r format(over_200, nsmall=0, big.mark="," )``` (```r format(percentage_over_200, digits=4, big.mark="," )``` %) are not singletons 
+
+. . .
+
+```{r, echo=FALSE,  warning=FALSE, message=FALSE}
+plotHistogram(non_singletons_cnvs, column="width", binwidth=200)
+
+```
+
+
+## Stich CNV candidates 
+
+```{r, message=FALSE, echo=FALSE,  warning=FALSE, fig.width=11, fig.height=6}
+plotRegionScatterLines(covs_db, gff, cnvs_to_plot[2], lines=cnvs_to_plot[2]$line, show.ribons=T, 
+show.cov=T, shape=".", stiched.cnv = cnvs , txdb = txdb )
+```
+
+
+## Stich CNV candidates 
+
+```{r, message=FALSE, echo=FALSE,  warning=FALSE, fig.width=11, fig.height=6}
+plotRegionScatterLines(covs_db, gff, cnvs_to_plot[4], lines=cnvs_to_plot[4]$line, show.ribons=T, 
+show.cov=T, shape=".", stiched.cnv = cnvs, txdb = txdb )
+```
+
+
+## Stich CNV candidates 
+
+```{r, message=FALSE, echo=FALSE,  warning=FALSE, fig.width=11, fig.height=6}
+p.to.extend <- plotRegionScatterLines(covs_db, gff, cnvs_to_plot[5], lines=cnvs_to_plot[5]$line, show.ribons=T, 
+show.cov=T, shape=".", stiched.cnv = cnvs )
+p.to.extend
+```
+
+
+# Deletions in 𝛾-radiation lines
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE}
+source('./extra_scripts/plot_skim.r', chdir = TRUE)
+params <- list()
+
+params$skim.path <- "/Users/ramirezr/Dropbox/JIC/Skim"
+
+seq.len.refseq.path  <- paste0(params$skim.path, "/WGAv1.0/sequence_lengths.txt")
+levs <- c("chr1A","chr1B", "chr1D","chr2A","chr2B", "chr2D","chr3A","chr3B", "chr3D","chr4A","chr4B", "chr4D","chr5A","chr5B", "chr5D","chr6A","chr6B", "chr6D","chr7A","chr7B", "chr7D","chrUn")
+seq.len.refseq <- read.csv(seq.len.refseq.path, sep="\t", stringsAsFactors=F)
+seq.len.refseq$seqname<-factor(seq.len.refseq$seqname, levels = levs)
+rownames(seq.len.refseq) <- seq.len.refseq$seqname
+
+gff.path=paste0(params$skim.path, "/WGAv1.0//Triticum_aestivum.IWGSC.43.chr.gff3.gz")
+gff.e43 <- import(gff.path)
+seqlengths(gff.e43) <- seq.len.refseq[levels(seqnames(gff.e43)),"length"]
+
+rds.path <- paste0(params$skim.path, "/notebook/Tables/all_dels_test_d1000_200k_to_10k_gap_3.rds")
+dels_d1000_g3 <- readDelsRDS(path=rds.path, lens=seq.len.refseq.path)
+
+
+ 
+```
+
+> - ~600 Paragon lines with radiation induced deletions 
+> - Identify lines with missing genes to test changes in phenotype
+> - Large window sizes to make up for low coverage
+> - Low sequencing coverage (0.3x)
+> - Collaboration with Nichlson lab. 
+
+
+
+## Normalised coverage in a line and region 
+
+```{r,  message=FALSE, echo=FALSE, warning=FALSE}
+chr <-   "chr3A"
+start <- 32000000
+endd   <- 68000000
+line <-  "J2.49_k80d50Mc5"
+plot_deletions_in_region(dels_d1000_g3, 
+                          chr=chr, 
+                          start= start,
+                          end  = endd,
+                          line=line, plot_validated = FALSE, 
+                          colors=c("200k"="#1b9e7700",
+                                             "100k"="#d95f0200",
+                                             "075k"="#7570b300",
+                                             "050k"="#e7298a00",
+                                             "025k"="#66a61eFF",
+                                             "010k"="#e6ab0200",
+                                             "Hom"="#8c510a",
+                                             "Het"="#01665e", 
+                                             "TRUE"="#cc8131",
+                                             "FALSE"="#cdE5e5")
+                         )
+```
+
+## Normalised coverage in a line and region 
+
+```{r,  message=FALSE, echo=FALSE, warning=FALSE}
+plot_deletions_in_region(dels_d1000_g3, 
+                          chr=chr, 
+                          start= start,
+                          end  = endd,
+                          line=line, plot_validated = FALSE,
+                          colors=c("200k"="#1b9e7700",
+                                             "100k"="#d95f0200",
+                                             "075k"="#7570b300",
+                                             "050k"="#e7298aFF",
+                                             "025k"="#66a61e30",
+                                             "010k"="#e6ab0200",
+                                             "Hom"="#8c510a",
+                                             "Het"="#01665e", 
+                                             "TRUE"="#cc8131",
+                                             "FALSE"="#cdE5e5"))
+```
+
+## Normalised coverage in a line and region 
+
+
+```{r,  message=FALSE, echo=FALSE, warning=FALSE}
+plot_deletions_in_region(dels_d1000_g3, 
+                          chr=chr, 
+                          start= start,
+                          end  = endd,
+                          line=line, plot_validated = FALSE,
+                          colors=c("200k"="#1b9e7700",
+                                             "100k"="#d95f0200",
+                                             "075k"="#7570b3FF",
+                                             "050k"="#e7298a30",
+                                             "025k"="#66a61e30",
+                                             "010k"="#e6ab0200",
+                                             "Hom"="#8c510a",
+                                             "Het"="#01665e", 
+                                             "TRUE"="#cc8131",
+                                             "FALSE"="#cdE5e5"))
+```
+
+## Normalised coverage in a line and region 
+
+```{r,  message=FALSE, echo=FALSE, warning=FALSE}
+plot_deletions_in_region(dels_d1000_g3, 
+                          chr=chr, 
+                          start= start,
+                          end  = endd,
+                          line=line, plot_validated = FALSE,
+                          colors=c("200k"="#1b9e7700",
+                                             "100k"="#d95f02FF",
+                                             "075k"="#7570b330",
+                                             "050k"="#e7298a30",
+                                             "025k"="#66a61e30",
+                                             "010k"="#e6ab0200",
+                                             "Hom"="#8c510a",
+                                             "Het"="#01665e", 
+                                             "TRUE"="#cc8131",
+                                             "FALSE"="#cdE5e5"))
+```
+
+## Normalised coverage in a line and region 
+
+```{r,  message=FALSE, echo=FALSE, warning=FALSE}
+plot_deletions_in_region(dels_d1000_g3, 
+                          chr=chr, 
+                          start= start,
+                          end  = endd,
+                          line=line, plot_validated = FALSE,
+                          colors=c("200k"="#1b9e77FF",
+                                             "100k"="#d95f0230",
+                                             "075k"="#7570b330",
+                                             "050k"="#e7298a30",
+                                             "025k"="#66a61e30",
+                                             "010k"="#e6ab0200",
+                                             "Hom"="#8c510a",
+                                             "Het"="#01665e", 
+                                             "TRUE"="#cc8131",
+                                             "FALSE"="#cdE5e5"))
+```
+
+## Normalised coverage in a line and region 
+
+```{r,  message=FALSE, echo=FALSE, warning=FALSE}
+plot_deletions_in_region(dels_d1000_g3, 
+                          chr=chr, 
+                          start= start,
+                          end  = endd,
+                          line=line, 
+                          colors=c("200k"="#1b9e77C0",
+                                             "100k"="#d95f02C0",
+                                             "075k"="#7570b3C0",
+                                             "050k"="#e7298aC0",
+                                             "025k"="#66a61eC0",
+                                             "010k"="#e6ab02C0",
+                                             "Hom"="#8c510a",
+                                             "Het"="#01665e", 
+                                             "TRUE"="#cc8131",
+                                             "FALSE"="#cdE5e5"))
+```
+
+
+## Deletions across genome
+ 
+```{r,  message=FALSE, echo=FALSE, warning=FALSE}
+plot_deletions_in_line(dels_d1000_g3, lens =seq.len.refseq, line=line)
+
+```
+
+## Paragon deletions website
+
+![](images/deletion.browser.png){ width=65% }
+
+http://wheat-deletion.cyverseuk.org 
+
+
+
+# Next steps
+
+> * Improve stiching algorithm 
+> * Use smaller window size (150bp, 100bp)
+> * Find genes/regions more prone to have CNVs
+> * Analyse in detail known CNVs 
+
+
+
+
+# Acknowledgments
+
+* WatSeq
+ * Simon Griffiths (JIC), Cheng Shifeng (AGIS),  Burkhard Stauernagel (JIC)
+* Paragon 𝛾-radiation lines 
+ * Paul Nichleson (JIC), Ben Hales (JIC), Anil Thanki (EI), Matt Clark (EI/NHM)
+
+![](images/UauyLab2020){ height=50% }
