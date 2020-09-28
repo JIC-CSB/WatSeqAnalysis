@@ -11,7 +11,7 @@
 
 <meta name="author" content="ramirezr" />
 
-<meta name="date" content="2020-08-10" />
+<meta name="date" content="2020-09-22" />
 
 <title>plotRegionScatterLines.r</title>
 
@@ -378,50 +378,90 @@ summary {
 
 <h1 class="title toc-ignore">plotRegionScatterLines.r</h1>
 <h4 class="author">ramirezr</h4>
-<h4 class="date">2020-08-10</h4>
+<h4 class="date">2020-09-22</h4>
 
 </div>
 
 
-<pre class="r"><code>plotRegionScatterLines &lt;- function(covs_db,gff, region, show.ribons=F ,lines=c(), window_size=250000, levels_count = 10 ){
-    local_cov &lt;- getWindowsInRange(covs_db,  ranges=region)
+<pre class="r"><code>plotRegionScatterLines &lt;- function(covs_db,gff, region, show.ribons=F,
+    genes=c(),  lines=c(), norm_cov_range = c(0,3), window_size=250000, txdb=NULL ,
+    gene.details=FALSE, levels_count = 10, 
+    show.coverage = FALSE, sd.border=2.5, shape=&quot;.&quot;,
+    stiched.cnv = NULL  ){
+
+    local_cov &lt;- getWindowsInRange(covs_db,  region=region,as.gr=TRUE)
     gff_local &lt;-  subsetByOverlaps(gff, region)
     gff_local &lt;- gff_local[gff_local$type == &quot;gene&quot;]
-    gff_local$pos_id &lt;- seq(from = 0, to=length(gff_local)-1)
-    gff_local$ymax &lt;- 0.5 + (gff_local$pos_id %% levels_count)
-    gff_local$ymin &lt;- gff_local$pos_id %% levels_count
+ 
+    p.norm.cov  &lt;- ggplot() 
+    if(length(gff_local)&gt;0){
+        gff_local$pos_id &lt;- 1
+        gff_local$pos_id &lt;- seq(from = 0, to=length(gff_local)-1)
+        gff_local$ymax &lt;- 0.5 + (gff_local$pos_id %% levels_count)
+        gff_local$ymin &lt;- gff_local$pos_id %% levels_count
+        gff_local$highligthed &lt;- gff_local$gene_id %in% genes
 
-    p.norm.cov  &lt;- ggplot(local_cov, aes(y=norm_cov, x=start, group= window_size * round(start / window_size) )) 
-    p.norm.cov  &lt;- p.norm.cov + theme_bw()
-    if(show.ribons){
-        regions     &lt;- data.frame( getRegionFromDB(covs_db, region=region, rename=FALSE) )
-        p.norm.cov  &lt;- p.norm.cov  + geom_ribbon(data = regions, mapping=aes(x = start ,ymin =  1 - sd_region, ymax = sd_region + 1), fill = &quot;grey70&quot;)
+        gff_h &lt;- gff_local[gff_local$highligthed]
 
-    }else{
-         p.norm.cov &lt;- p.norm.cov + geom_boxplot(outlier.shape = NA) 
+         p.norm.cov  &lt;- p.norm.cov + geom_vline(xintercept=start(gff_h), col=&quot;red&quot;)
     }
-    p.norm.cov  &lt;- p.norm.cov + theme(legend.position = &quot;top&quot;)
-    p.norm.cov  &lt;- p.norm.cov + ylim(c(0,3))
+    
+    #regions     &lt;- data.frame( getRegionFromDB(covs_db, region=region, rename=FALSE) )
+    if(show.ribons){
+        regions     &lt;- getRegionFromDB(covs_db, region=region, rename=TRUE) 
+        regions$y_min = 1 - (sd.border * regions$sd )
+        regions$y_max = 1 + (sd.border * regions$sd )
+        #y_min = 0.5
+        #y_max = 1.5
+        p.norm.cov  &lt;- p.norm.cov  + geom_ribbon(data = regions, mapping=aes(x = start ,ymin = y_min, ymax = y_max), fill = &quot;grey70&quot;)
+        #return(head(regions));
+    }else{
+         p.norm.cov &lt;- p.norm.cov + geom_boxplot(data=data.frame(local_cov), mapping=aes(y=norm_cov, x=start, group= window_size * round(start / window_size) ), outlier.shape = NA) 
+    }
+    p.norm.cov  &lt;- p.norm.cov + theme_bw()  
+    #p.norm.cov  &lt;- p.norm.cov  #+ coord_cartesian(ylim = norm_cov_range)  
 
-    p.genes &lt;- ggplot(gff_local) + geom_rect(aes(xmin=start, xmax=end , ymin = ymin, ymax = ymax ), stat = &quot;identity&quot;, color = NA) 
-    p.genes &lt;- p.genes +  geom_text(aes(x=start, y =  ymax+0.2, label = gene_id), size=2, check_overlap=T ) 
-    p.genes &lt;- p.genes + theme_bw()
+    p.genes &lt;- ggplot()
+    if(length(gff_local)&gt;0){
+        if(is.null(txdb)){
+            p.genes &lt;- ggplot(gff_local) + geom_rect(aes(xmin=start, xmax=end , ymin = ymin, ymax = ymax ), stat = &quot;identity&quot;, color = NA) 
+            p.genes &lt;- p.genes +  geom_text(aes(x=start, y =  ymax+0.2, label = gene_id, color=highligthed), size=2, check_overlap=T ) 
+            p.genes &lt;- p.genes + theme_bw() + theme(legend.position = &quot;none&quot;) + scale_colour_manual(values=c(&quot;TRUE&quot;=&quot;red&quot;, &quot;FALSE&quot;=&quot;black&quot;))
+        }else{
+            p.genes &lt;- autoplot(txdb, which = region) + xlim(region) + theme_bw() 
+        }
+    }
 
     heights = c()
     tracks_details &lt;- list()
 
     for(line in lines){
         tmp_data &lt;- data.frame(local_cov[local_cov$line == line])
-        tracks_details[[line]] &lt;-  p.norm.cov  + geom_point(data=(tmp_data), shape=&quot;.&quot;)
+        
+        if(show.coverage){
+            title_cov &lt;- paste0(line, &quot; cov&quot;)
+             tracks_details[[title_cov]] &lt;- ggplot()  + geom_point(data=(tmp_data), mapping = aes(x=start, y=cov),shape=shape) + theme_bw()
+             heights &lt;- append(heights,1)
+        }
+       
+        tmp_p &lt;- p.norm.cov  + geom_point(data=(tmp_data), mapping = aes(x=start, y=norm_cov),shape=shape) 
+        if(!is.null(stiched.cnv)){
+
+            tmp_p &lt;- geom_segment(data=stiched.cnv, aes(y=cnv_level, yend=cnv_level) )
+        }
+        
+        tracks_details[[line]] &lt;-  tmp_p + ylim(norm_cov_range) # + coord_cartesian(ylim = norm_cov_range)  
         heights &lt;- append(heights,1)
     }
 
-    tracks_details[[&quot;genes&quot;]] &lt;- p.genes
-    heights &lt;- append(heights,1)
-
-    tks &lt;- tracks(tracks_details, heights = heights )  + xlim(gr4D)  + scale_x_sequnit(unit = &quot;Mb&quot; ) 
+    if(length(gff_local)&gt;0){
+        tracks_details[[&quot;genes&quot;]] &lt;- p.genes
+        heights &lt;- append(heights,1)
+    }
+    tks &lt;- tracks(tracks_details, heights = heights ) + scale_x_sequnit(unit = &quot;Mb&quot; )  + xlim(region)  
     tks
     #gff_local
+    #regions
 }</code></pre>
 
 
