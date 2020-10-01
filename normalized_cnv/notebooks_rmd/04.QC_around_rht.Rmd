@@ -1,0 +1,101 @@
+---
+output: 
+    pdf_document
+
+params: 
+    set_title: "Analysis of CNV around RHT for QC"
+    data_path: "~/Documents/WatSeq/Deletions/20200724/200bp/"
+    gff_file: "~/Dropbox/JIC/WatSeq/Annotation/Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz"
+title: "`r params$set_title`"
+author: "Ricardo H. Ramirez-Gonzalez"
+---
+```{r, message=FALSE, echo=FALSE}
+library(devtools)
+library(knitr)
+library(ggbio)
+library(GenomicRanges)
+library(GenomicFeatures)
+library(rtracklayer)
+library(dplyr)
+library(RSQLite)
+load_all("../bio.cnv/R", TRUE)
+sd_path <- paste0(params$data_path, "libSD_short.csv")
+libsd <- read.csv(sd_path)
+noisy_lines <- libsd[libsd$SD > 0.45,]
+
+
+gff<- import(params$gff_file)
+covs_db = dbConnect(drv=RSQLite::SQLite(), dbname="~/Documents//WatSeq/Deletions/20200724/200bp/long_tables/covs_200bp.db")
+
+```
+
+
+This notebook is to look at some examples of lines where calling the CNV may be troublesome, based on the dispersion 
+
+Out of  ``r nrow(libsd) `` lines, ``r nrow(noisy_lines)`` have an $\sigma > 0.45$.
+We consider lines above the threshold as noisy. 
+
+
+```{r,  message=FALSE, echo=FALSE}
+plotHistogram(libsd, column = "SD",     binwidth=0.01, trim_range=F)
+kable(noisy_lines)
+
+```
+
+## Details for TraesCS4D02G040100  
+
+To showcase the issues with the ```r nrow(noisy_lines) ``` noisy lines, we have a closer look at ```TB1-4D```. 
+The ribbon is showing the area $\pm 3\sigma$ across each particular window. 
+The dots that are outside the ribbon represent windows that are candidates to be considered a CNV, as tehy are outside the $99\%$ expectation, assuming a normal distribution. 
+
+In this example, lines ```WATDE0009``` and ```WATDE0039``` are considered as noisy. 
+Naivley, one would think that there are plenty of candidates for CNV on those lines. However, the fact that the values oscilate above and bellow the region of the expected distribution suggests that this calls are noisy. 
+Line ```WATDE0821``` seem to have some duplications. We can call this because the normalised coverage is, in generalover the expected dispersion, withut any value close to 0. Furthermore, the windows outside the gene seem quite stable. 
+Line ```WATFE812```  doesn't seem to have anything abnormal, which should be how most of hte lines look. 
+
+This is relevant because in some of the previous heatmaps this line are shown as having CNV. 
+
+```{r,  message=FALSE, echo=FALSE, fig.width=7, fig.height=7,  warning=FALSE}
+gr4D <- GRanges("chr4D_part1", IRanges(18463838 - 1000000, 18472387 + 1000000))
+lines <- c("WATDE0009", "WATDE0039", "WATDE0821", "WATDE0812")
+plotRegionScatterLines(covs_db, gff, gr4D, lines=lines, show.ribons=T, genes=c("TraesCS4D02G040100"))
+```
+
+\pagebreak
+
+##  Some examples around TraesCS6A02G022700
+
+The gene ```TraesCS6A02G022700``` is reported has missing copies in the Chinese Spring reference. 
+We picked this because we wanted to see if we observe this gene has some variation. 
+Again, the lines ```WATDE0009``` and ```WATDE0039```  show a lot of variation, so this is consistent with the noise being noisy.
+Line ```B1190729.1``` seems to have higher coverage, which is expected. 
+Lines  ````WATDE0018``` and ```WATDE0141``` have a lower coverage, but it doesn't go to 0. This may be a case where there is a single copy, in a region that is collapsed in the assembly. 
+
+```{r,  message=FALSE, echo=FALSE, fig.width=7, fig.height=8,  warning=FALSE}
+
+gr6A <- GRanges("chr6A_part1", IRanges(11280128 - 1000000, 11280811 + 1000000))
+lines2 <- c("WATDE0009", "WATDE0039", "WATDE0821", "WATDE0812", "WATDE0141", "WATDE0018", "B1190729.1")
+#lines <- c("WATDE0009", "WATDE0039", "WATDE0821", "WATDE0812")
+#plotRegionScatterLines(covs_db, gff, gr4D, lines=lines)
+plotRegionScatterLines(covs_db, gff, gr6A, lines=lines2, show.ribons=T, norm_cov_range=c(0,5), genes=c("TraesCS6A02G022700"))
+```
+\pagebreak
+
+## Details for TraesCS6A02G022700, to show change in real coverage
+
+To look if the change in global coverage in regions that are repetitve can be detected only from the raw coverage, but not from the normalised values, we explored in more detail lines ```B1190729.1```, ````WATDE0018``` and ```WATDE0141```.
+
+ ```WATDE0141``` ann ```WATDE0018``` seems like having the same raw dispersion of raw coverage in the higlighted region, but a normalised coverage around and below 0.5.  
+ This may indicate that the assembly is collapsing two copies, but this samples only have one copy of the gene. 
+
+```B1190729.1``` Seems to have more coverage in that region, so it may be that the line has more than the 2 expected collapsed copies from the reference. 
+
+```{r,  message=FALSE, echo=FALSE, fig.width=7, fig.height=7,  warning=FALSE}
+
+gr6A <- GRanges("chr6A_part1", IRanges(11280128 - 1000000, 11280811 + 1000000))
+
+lines2 <- c("WATDE0141", "WATDE0018", "B1190729.1")
+plotRegionScatterLines(covs_db, gff, gr6A, lines=lines2, show.ribons=T, show.cov=T, norm_cov_range=c(0,5), genes=c("TraesCS6A02G022700"))
+```
+
+

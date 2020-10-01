@@ -1,0 +1,61 @@
+---
+output: 
+    pdf_document
+
+params: 
+    set_title: "Analysis of CNV around RHT for stiching"
+    data_path: "~/Documents/WatSeq/Deletions/20200724/200bp/"
+    gff_file: "~/Dropbox/JIC/WatSeq/Annotation/Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz"
+title: "`r params$set_title`"
+author: "Ricardo H. Ramirez-Gonzalez"
+---
+
+
+
+```{r, message=FALSE, echo=FALSE}
+library(devtools)
+library(knitr)
+library(GenomicRanges)
+#library(GenomicFeatures)
+library(RSQLite)
+load_all("../bio.cnv/R", TRUE)
+
+#gff<- import(params$gff_file)
+covs_db = dbConnect(drv=RSQLite::SQLite(), dbname="~/Documents//WatSeq/Deletions/20200724/200bp/long_tables/covs_200bp.db")
+```
+
+Testing that we can get all the chromosome: 
+
+```{r}
+regions <- getFullChromosomes(covs_db)
+kable(regions)
+
+```
+
+First we want to stich all the coverages for a single group. 
+
+
+```{r,  message=FALSE, echo=FALSE, fig.width=7, fig.height=7,  warning=FALSE}
+gr4D <- GRanges("chr4D_part1", IRanges(18000000, 19000000))
+#gr4D <- GRanges("chr6A_part1", IRanges(11280128 - 1000000, 11280811 + 1000000))
+lines <- c("WATDE0009", "WATDE0039", "WATDE0821", "WATDE0812")
+#plotRegionScatterLines(covs_db, gff, gr4D, lines=lines, show.ribons=T, genes=c("TraesCS4D02G040100"))
+
+dels <- getCNVInRegion(covs_db, region=gr4D, line="WATDE0009", max_gap=20, het=FALSE)
+kable(dels)
+
+dels <- getCNVInRegion(covs_db, region=gr4D, line="WATDE0039", max_gap=20, het=FALSE)
+kable(dels)
+
+    dels <- getCNVInRegion(covs_db, region=gr4D, line="WATDE0821", max_gap=20, het=FALSE)
+kable(dels)
+
+dels <- getCNVInRegion(covs_db, region=gr4D, line="WATDE0812", max_gap=20, het=FALSE)
+kable(dels)
+
+```
+
+
+```{r}
+sessionInfo()
+```

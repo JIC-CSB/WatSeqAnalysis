@@ -1,0 +1,11 @@
+Package: bio.cnv
+Title: Calculate copy number variations on windows of coverage. 
+Version: 0.1.0.000
+Authors@R: person("Ricardo H.", "Ramirez-Gonzalez", email = "ricardo.ramirez-gonzalez@jic.ac.uk", role = c("aut", "cre"))
+Description: Calculate copy number variations on windows of coverage. . 
+Depends: R (>= 3.6)
+Suggests: ggbio, GenomicRanges, GenomicFeatures, rtracklayer
+License: MIT 
+LazyData: true
+Imports: e1071, ggplot2, dplyr, reshape2, sqldf, parallel, optparse, hash, RSQLite, quantreg
+VignetteBuilder: knitr

@@ -1,0 +1,50 @@
+---
+output: 
+    pdf_document
+
+params: 
+    set_title: "Global analysis of CNV"
+    data_path: "~/Documents/WatSeq/Deletions/20200724/200bp/"
+    gff_file: "~/Dropbox/JIC/WatSeq/Annotation/Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz"
+title: "`r params$set_title`"
+author: "Ricardo H. Ramirez-Gonzalez"
+---
+
+```{r, message=FALSE, echo=FALSE}
+
+params<-list()
+params$data_path <- "~/Documents/WatSeq/Deletions/20200724/200bp/"
+params$gff <- "~/Dropbox/JIC/WatSeq/Annotation/Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz"
+#params$gff <- "~/Dropbox/JIC/WatSeq/Annotation/IWGSCv1.0_UTR_ALL.parts.tidy.gff3.gz"
+
+library(devtools)
+library(knitr)
+library(GenomicRanges)
+library(GenomicFeatures)
+library(RSQLite)
+library(ggbio)
+library(rtracklayer)
+load_all("../bio.cnv/R", TRUE)
+gff  <- import(params$gff)
+
+seq_len=paste0(params$data_path, "sequence_lengths.txt")
+#levels <- c("chr1A","chr1B", "chr1D","chr2A","chr2B", "chr2D","chr3A","chr3B", "chr3D","chr4A","chr4B", "chr4D","chr5A","chr5B", "chr5D","chr6A","chr6B", "chr6D","chr7A","chr7B", "chr7D","chrUn")
+lens <- read.csv(seq_len, sep="\t", stringsAsFactors=F)
+levels <- lens$seqname
+lens$seqname<-factor(lens$seqname, levels = levels)
+
+
+#cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/all_cnv.csv.gz") 
+#cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/all_cnv.csv") 
+cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/chr6D_part2.cnv.for.db.tsv") 
+covs_db = dbConnect(drv=RSQLite::SQLite(), dbname="~/Documents//WatSeq/Deletions/20200724/200bp/long_tables/covs_200bp.db")
+
+#cnvs_df <- read.csv(gzfile(cnvs_file))
+cnvs_df <- read.csv(cnvs_file, sep = "\t" )
+cnvs <- makeGRangesFromDataFrame(cnvs_df, keep.extra.columns=T)
+
+#without_name <- cnvs[is.na(seqnames(cnvs))]
+cnvs<-fixRangesOrder(cnvs, lens, ordr=lens$seqname)
+
+genes_to_display <- c("TraesCS6D02G366600", "TraesCS6D02G400000", "TraesCS6D02G375500", "TraesCS6D02G395100", "TraesCS6D02G401400")
+````
