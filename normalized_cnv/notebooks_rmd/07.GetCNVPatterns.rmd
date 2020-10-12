@@ -5,16 +5,16 @@ output:
 params: 
     set_title: "Global analysis of CNV"
     data_path: "~/Documents/WatSeq/Deletions/20200724/200bp/"
-    gff_file: "~/Dropbox/JIC/WatSeq/Annotation/Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz"
+    gff: "~/Dropbox/JIC/WatSeq/Annotation/Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz"
 title: "`r params$set_title`"
 author: "Ricardo H. Ramirez-Gonzalez"
 ---
 
 ```{r, message=FALSE, echo=FALSE}
 
-params<-list()
-params$data_path <- "~/Documents/WatSeq/Deletions/20200724/200bp/"
-params$gff <- "~/Dropbox/JIC/WatSeq/Annotation/Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz"
+# params<-list()
+# params$data_path <- "~/Documents/WatSeq/Deletions/20200724/200bp/"
+# params$gff <- "~/Dropbox/JIC/WatSeq/Annotation/Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz"
 #params$gff <- "~/Dropbox/JIC/WatSeq/Annotation/IWGSCv1.0_UTR_ALL.parts.tidy.gff3.gz"
 
 library(devtools)
@@ -24,6 +24,9 @@ library(GenomicFeatures)
 library(RSQLite)
 library(ggbio)
 library(rtracklayer)
+require(plyr)
+require(dplyr)
+library("parallel")
 load_all("../bio.cnv/R", TRUE)
 gff  <- import(params$gff)
 
@@ -33,18 +36,80 @@ lens <- read.csv(seq_len, sep="\t", stringsAsFactors=F)
 levels <- lens$seqname
 lens$seqname<-factor(lens$seqname, levels = levels)
 
-
-#cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/all_cnv.csv.gz") 
-#cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/all_cnv.csv") 
-cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/chr6D_part2.cnv.for.db.tsv") 
 covs_db = dbConnect(drv=RSQLite::SQLite(), dbname="~/Documents//WatSeq/Deletions/20200724/200bp/long_tables/covs_200bp.db")
 
+
+#cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/all_cnv.csv.gz") 
 #cnvs_df <- read.csv(gzfile(cnvs_file))
+
+#cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/all_cnv.csv") 
+cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/chr6D_part2.cnv.for.db.tsv") 
 cnvs_df <- read.csv(cnvs_file, sep = "\t" )
+
 cnvs <- makeGRangesFromDataFrame(cnvs_df, keep.extra.columns=T)
 
 #without_name <- cnvs[is.na(seqnames(cnvs))]
 cnvs<-fixRangesOrder(cnvs, lens, ordr=lens$seqname)
 
 genes_to_display <- c("TraesCS6D02G366600", "TraesCS6D02G400000", "TraesCS6D02G375500", "TraesCS6D02G395100", "TraesCS6D02G401400")
+
+to_ignore <- c("WATDE0009", "WATDE0039",  "WATDE0056", "WATDE0060" ,  "WATDE0090")
+
+#filled  <- fillAllCNVsAroundGenes(cnvs, gff[gff$type=="gene"], mc.cores = 4)
+
+#filled <- filled[filled$line %in% setdiff(unique(filled$line), to_ignore) ]
+
+# gene_to_show <- "TraesCS1B02G049300"
+# region_1B <- gff[gff$gene_id %in% c(gene_to_show)] 
+# region_1B <- flank(region_1B, 5000, both=TRUE)
+
+
+sample_lines <- c(
+    "WATDE0663", "WATDE0721", "WATDE0444", "WATDE0057", "WATDE0687", "WATDE0632", "WATDE0009", "WATDE1023", 
+    "WATDE0544", "WATDE0079", "WATDE1046", "WATDE0759", "WATDE1009", "WATDE0944", "WATDE0038", "WATDE1017", "WATDE0926",
+    "WATDE0059", "WATDE0606", "WATDE0543", "WATDE0503", "WATDE1049", "WATDE0638", "WATDE0730", "WATDE0941", "WATDE1032", 
+    "WATDE1016", "WATDE0817", "WATDE0109", "WATDE0176", "WATDE0691", "WATDE0456", "WATDE0453", "WATDE1018", "WATDE0561", 
+    "WATDE0704", "WATDE0945", "WATDE0781", "WATDE0975", "WATDE0910")
+
+genes_to_display_regions <- gff[gff$gene_id %in% genes_to_display]
+genes_to_display_regions <- exetendGR(genes_to_display_regions, size=2000)
+
+first_gene <- genes_to_display_regions[1]
+#filled_lines_values <- subsetByOverlaps(cnvs, first_gene)
+#lines_with_changes <- unique(filled_lines_values[filled_lines_values$cnv_level != 1]$line)
+#sample_lines <-  sample(lines_with_changes, 20)
+region_copy <- countCNVsPerRegion(cnvs_df)
 ````
+
+ 
+First we want to explore some lines. 
+
+
+
+```{r}
+plotHistogram(region_copy, column="n",trim_range = T)
+plotHistogram(region_copy[region_copy$n>1,], column="n",trim_range = F,binwidth = 1) + coord_cartesian(xlim=c(0,50))
+```
+
+
+```{r,  message=FALSE, echo=FALSE, fig.width=7, fig.height=7,  warning=FALSE, results='asis'}
+#plotDeletionsInRegion(cnvs, genes_to_display_regions[2], lines=sample_lines)
+cat("enterign the loop\n")
+for(i in seq(1, length(genes_to_display_regions))){
+    print(plotDeletionsInRegion(cnvs, genes_to_display_regions[i], lines=sample_lines))
+    #cov_region <- getWindowsInRange(covs_db,  region=genes_to_display_regions[i])
+    cat(i, "\n")
+    for(j in seq(1, length(sample_lines))){
+        cat(sample_lines[j], "\n")
+        #p1 <- plotLibraryOnChromosomeInterval(cov_region, lines=c(sample_lines[j]),  col="norm_cov" )
+        #p1 <- p1 + coord_cartesian(ylim=c(0,4) ) 
+        #p1 <- p1 + theme(legend.position="bottom")
+        p1 <- plotRegionScatterLines(covs_db, gff, genes_to_display_regions[i], lines=c(sample_lines[j]), stiched.cnv = cnvs, show.ribons=T, norm_cov_range=c(0,8 ))
+        print(p1)
+    }
+
+}
+
+```
+
+

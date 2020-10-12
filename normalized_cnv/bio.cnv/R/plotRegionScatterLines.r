@@ -26,15 +26,12 @@ plotRegionScatterLines <- function(covs_db,gff, region, show.ribons=F,
         regions     <- getRegionFromDB(covs_db, region=region, rename=TRUE) 
         regions$y_min = 1 - (sd.border * regions$sd )
         regions$y_max = 1 + (sd.border * regions$sd )
-        #y_min = 0.5
-        #y_max = 1.5
+        regions$y_min <- ifelse(regions$y_min < 0,  0 , regions$y_min)
         p.norm.cov  <- p.norm.cov  + geom_ribbon(data = regions, mapping=aes(x = start ,ymin = y_min, ymax = y_max), fill = "grey70")
-        #return(head(regions));
     }else{
          p.norm.cov <- p.norm.cov + geom_boxplot(data=data.frame(local_cov), mapping=aes(y=norm_cov, x=start, group= window_size * round(start / window_size) ), outlier.shape = NA) 
     }
     p.norm.cov  <- p.norm.cov + theme_bw()  
-    #p.norm.cov  <- p.norm.cov  #+ coord_cartesian(ylim = norm_cov_range)  
 
     p.genes <- ggplot()
     if(length(gff_local)>0){
