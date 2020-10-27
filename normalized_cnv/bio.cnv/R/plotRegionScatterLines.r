@@ -1,8 +1,11 @@
 plotRegionScatterLines <- function(covs_db,gff, region, show.ribons=F,
-    genes=c(),  lines=c(), norm_cov_range = c(0,3), window_size=250000, txdb=NULL ,
+    genes=c(),  lines=c(), norm_cov_range = c(0,3), 
+    window_size=250000, txdb=NULL ,
     gene.details=FALSE, levels_count = 10, 
     show.coverage = FALSE, sd.border=2.5, shape=".",
-    stiched.cnv = NULL  ){
+    stiched.cnv = NULL, max_cov_del = 0.1  ){
+
+    
 
     local_cov <- getWindowsInRange(covs_db,  region=region,as.gr=TRUE)
     gff_local <-  subsetByOverlaps(gff, region)
@@ -21,13 +24,22 @@ plotRegionScatterLines <- function(covs_db,gff, region, show.ribons=F,
          p.norm.cov  <- p.norm.cov + geom_vline(xintercept=start(gff_h), col="red")
     }
     
+    p.norm.cov <- p.norm.cov + geom_hline(yintercept=c(max_cov_del, 2-max_cov_del ), col="gray60")
+
     #regions     <- data.frame( getRegionFromDB(covs_db, region=region, rename=FALSE) )
     if(show.ribons){
-        regions     <- getRegionFromDB(covs_db, region=region, rename=TRUE) 
-        regions$y_min = 1 - (sd.border * regions$sd )
-        regions$y_max = 1 + (sd.border * regions$sd )
+        regions       <- getRegionFromDB(covs_db, region=region, rename=TRUE) 
+        regions$y_min <- 1 - (sd.border * regions$sd )
+        regions$y_max <- 1 + (sd.border * regions$sd )
         regions$y_min <- ifelse(regions$y_min < 0,  0 , regions$y_min)
-        p.norm.cov  <- p.norm.cov  + geom_ribbon(data = regions, mapping=aes(x = start ,ymin = y_min, ymax = y_max), fill = "grey70")
+        regions$y_max <- ifelse(regions$y_max > norm_cov_range[2],  norm_cov_range[2] , regions$y_max)
+
+        regions$limit  <- regions$sd * sd.border 
+        regions$min_sd <- 1 - regions$limit 
+        regions$noisy <- regions$min_sd <= max_cov_del
+        #fill=noisy
+        p.norm.cov  <- p.norm.cov  +
+        geom_ribbon(data = regions, mapping=aes(x = start ,ymin = y_min, ymax = y_max), fill="gray90")
     }else{
          p.norm.cov <- p.norm.cov + geom_boxplot(data=data.frame(local_cov), mapping=aes(y=norm_cov, x=start, group= window_size * round(start / window_size) ), outlier.shape = NA) 
     }

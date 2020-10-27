@@ -36,26 +36,36 @@ lens <- read.csv(seq_len, sep="\t", stringsAsFactors=F)
 levels <- lens$seqname
 lens$seqname<-factor(lens$seqname, levels = levels)
 
-covs_db = dbConnect(drv=RSQLite::SQLite(), dbname="~/Documents//WatSeq/Deletions/20200724/200bp/long_tables/covs_200bp.db")
+db_path <- paste0(params$data_path, "/long_tables/covs_200bp.db")
+covs_db = dbConnect(drv=RSQLite::SQLite(), dbname=db_path)
 
 
 #cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/all_cnv.csv.gz") 
 #cnvs_df <- read.csv(gzfile(cnvs_file))
 
 #cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/all_cnv.csv") 
+#cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/chr6D_part2.cnv.for.db.tsv") 
 cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/chr6D_part2.cnv.for.db.tsv") 
-cnvs_df <- read.csv(cnvs_file, sep = "\t" )
+cnvs_df_M10 <- read.csv(cnvs_file, sep = "\t" )
 
-cnvs <- makeGRangesFromDataFrame(cnvs_df, keep.extra.columns=T)
+cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M3/chr6D_part2.cnv.for.db.tsv") 
+cnvs_df_M3 <- read.csv(cnvs_file, sep = "\t" )
+
+cnvs_M3 <- makeGRangesFromDataFrame(cnvs_df_M3, keep.extra.columns=T)
+cnvs_M10 <- makeGRangesFromDataFrame(cnvs_df_M10, keep.extra.columns=T)
 
 #without_name <- cnvs[is.na(seqnames(cnvs))]
-cnvs<-fixRangesOrder(cnvs, lens, ordr=lens$seqname)
+cnvs_M3<-fixRangesOrder(cnvs_M3, lens, ordr=lens$seqname)
+cnvs_M10<-fixRangesOrder(cnvs_M10, lens, ordr=lens$seqname)
 
 genes_to_display <- c("TraesCS6D02G366600", "TraesCS6D02G400000", "TraesCS6D02G375500", "TraesCS6D02G395100", "TraesCS6D02G401400")
 
 to_ignore <- c("WATDE0009", "WATDE0039",  "WATDE0056", "WATDE0060" ,  "WATDE0090")
 
-#filled  <- fillAllCNVsAroundGenes(cnvs, gff[gff$type=="gene"], mc.cores = 4)
+cnvs_M10 <- cnvs_M10[cnvs_M10$line %in% setdiff(unique(cnvs_M10$line), to_ignore) ]
+cnvs_M3 <- cnvs_M3[cnvs_M3$line %in% setdiff(unique(cnvs_M3$line), to_ignore) ]
+
+filled_M3  <- fillAllCNVsAroundGenes(cnvs_M3, gff[gff$type=="gene"], mc.cores = 4)
 
 #filled <- filled[filled$line %in% setdiff(unique(filled$line), to_ignore) ]
 
@@ -65,7 +75,7 @@ to_ignore <- c("WATDE0009", "WATDE0039",  "WATDE0056", "WATDE0060" ,  "WATDE0090
 
 
 sample_lines <- c(
-    "WATDE0663", "WATDE0721", "WATDE0444", "WATDE0057", "WATDE0687", "WATDE0632", "WATDE0009", "WATDE1023", 
+    "WATDE0663", "WATDE0721", "WATDE0444", "WATDE0057", "WATDE0687", "WATDE0632", "WATDE1023", 
     "WATDE0544", "WATDE0079", "WATDE1046", "WATDE0759", "WATDE1009", "WATDE0944", "WATDE0038", "WATDE1017", "WATDE0926",
     "WATDE0059", "WATDE0606", "WATDE0543", "WATDE0503", "WATDE1049", "WATDE0638", "WATDE0730", "WATDE0941", "WATDE1032", 
     "WATDE1016", "WATDE0817", "WATDE0109", "WATDE0176", "WATDE0691", "WATDE0456", "WATDE0453", "WATDE1018", "WATDE0561", 
@@ -78,7 +88,8 @@ first_gene <- genes_to_display_regions[1]
 #filled_lines_values <- subsetByOverlaps(cnvs, first_gene)
 #lines_with_changes <- unique(filled_lines_values[filled_lines_values$cnv_level != 1]$line)
 #sample_lines <-  sample(lines_with_changes, 20)
-region_copy <- countCNVsPerRegion(cnvs_df)
+region_copy_M3 <- countCNVsPerRegion(cnvs_df_M3)
+region_copy_M10 <- countCNVsPerRegion(cnvs_df_M10)
 ````
 
  
@@ -86,25 +97,35 @@ First we want to explore some lines.
 
 
 
-```{r}
-plotHistogram(region_copy, column="n",trim_range = T)
-plotHistogram(region_copy[region_copy$n>1,], column="n",trim_range = F,binwidth = 1) + coord_cartesian(xlim=c(0,50))
+```{r,message=FALSE, echo=FALSE, fig.width=7, fig.height=7,  warning=FALSE, results='asis'}
+p1 <- plotHistogram(region_copy_M10, column="n", title_prefix="Max Gap: 10 (wrong) ",trim_range = T)
+p2 <- plotHistogram(region_copy_M10[region_copy_M10$n>1,], column="n", title_prefix="Max Gap: 10 (wrong) ",trim_range = F,binwidth = 1) + coord_cartesian(xlim=c(0,50))
+p3 <- plotHistogram(region_copy_M3, column="n", title_prefix="Max Gap: 3 ",trim_range = T)
+p4 <- plotHistogram(region_copy_M3[region_copy_M3$n>1,], column="n", title_prefix="Max Gap: 3 ",trim_range = F,binwidth = 1) + coord_cartesian(xlim=c(0,50))
+multiplot(plotlist= list(p1,p2,p3,p4), cols = 2)
 ```
 
 
 ```{r,  message=FALSE, echo=FALSE, fig.width=7, fig.height=7,  warning=FALSE, results='asis'}
 #plotDeletionsInRegion(cnvs, genes_to_display_regions[2], lines=sample_lines)
-cat("enterign the loop\n")
-for(i in seq(1, length(genes_to_display_regions))){
-    print(plotDeletionsInRegion(cnvs, genes_to_display_regions[i], lines=sample_lines))
-    #cov_region <- getWindowsInRange(covs_db,  region=genes_to_display_regions[i])
-    cat(i, "\n")
-    for(j in seq(1, length(sample_lines))){
-        cat(sample_lines[j], "\n")
-        #p1 <- plotLibraryOnChromosomeInterval(cov_region, lines=c(sample_lines[j]),  col="norm_cov" )
-        #p1 <- p1 + coord_cartesian(ylim=c(0,4) ) 
-        #p1 <- p1 + theme(legend.position="bottom")
-        p1 <- plotRegionScatterLines(covs_db, gff, genes_to_display_regions[i], lines=c(sample_lines[j]), stiched.cnv = cnvs, show.ribons=T, norm_cov_range=c(0,8 ))
+lines_per_plot <- 4
+regions_test <- read.csv("6d_regions_to_test.csv")
+regions_test <- makeGRangesFromDataFrame(regions_test)
+
+for(i in seq(1, length(regions_test))){
+    print(plotDeletionsInRegion(filled_M3, regions_test[i], lines=sample_lines))
+    for(j in seq(1,  length(sample_lines)/lines_per_plot ) ){
+
+        first_line <- j * lines_per_plot
+        last_line  <- first_line + lines_per_plot
+        last_line <- ifelse(last_line > length(sample_lines), length(sample_lines), last_line)
+        lines_j <- sample_lines[seq(first_line, last_line)]  
+        p1 <- plotRegionScatterLines(covs_db, gff, 
+            regions_test[i], 
+            lines=lines_j, 
+            stiched.cnv = filled_M3, 
+            show.ribons=T, 
+            norm_cov_range=c(0,4 ))
         print(p1)
     }
 

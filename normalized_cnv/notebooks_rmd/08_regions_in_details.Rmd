@@ -1,0 +1,223 @@
+---
+output: 
+    pdf_document
+
+params: 
+    set_title: "Analisis of CNV stiching improvments"
+    data_path: "~/Documents/WatSeq/Deletions/20200724/200bp/"
+    gff: "~/Dropbox/JIC/WatSeq/Annotation/Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz"
+title: "`r params$set_title`"
+author: "Ricardo H. Ramirez-Gonzalez"
+---
+
+```{r, message=FALSE, echo=FALSE,  warning=FALSE}
+
+# params<-list()
+# params$data_path <- "~/Documents/WatSeq/Deletions/20200724/200bp/"
+# params$gff <- "~/Dropbox/JIC/WatSeq/Annotation/Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz"
+#params$gff <- "~/Dropbox/JIC/WatSeq/Annotation/IWGSCv1.0_UTR_ALL.parts.tidy.gff3.gz"
+
+library(devtools)
+library(knitr)
+library(GenomicRanges)
+library(GenomicFeatures)
+library(RSQLite)
+library(ggbio)
+library(rtracklayer)
+require(plyr)
+require(dplyr)
+library("parallel")
+load_all("../bio.cnv/R", TRUE)
+gff  <- import(params$gff)
+
+seq_len=paste0(params$data_path, "sequence_lengths.txt")
+#levels <- c("chr1A","chr1B", "chr1D","chr2A","chr2B", "chr2D","chr3A","chr3B", "chr3D","chr4A","chr4B", "chr4D","chr5A","chr5B", "chr5D","chr6A","chr6B", "chr6D","chr7A","chr7B", "chr7D","chrUn")
+lens <- read.csv(seq_len, sep="\t", stringsAsFactors=F)
+levels <- lens$seqname
+lens$seqname<-factor(lens$seqname, levels = levels)
+
+db_path <- paste0(params$data_path, "/long_tables/covs_200bp.db")
+covs_db = dbConnect(drv=RSQLite::SQLite(), dbname=db_path)
+
+
+#cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/all_cnv.csv.gz") 
+#cnvs_df <- read.csv(gzfile(cnvs_file))
+
+#cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/all_cnv.csv") 
+#cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/chr6D_part2.cnv.for.db.tsv") 
+cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M10/chr6D_part2.cnv.for.db.tsv") 
+cnvs_df_M10 <- read.csv(cnvs_file, sep = "\t" )
+
+cnvs_file <- paste0(params$data_path, "/long_tables/cnv_out_M3/chr6D_part2.cnv.for.db.tsv") 
+cnvs_df_M3 <- read.csv(cnvs_file, sep = "\t" )
+
+cnvs_M3 <- makeGRangesFromDataFrame(cnvs_df_M3, keep.extra.columns=T)
+cnvs_M10 <- makeGRangesFromDataFrame(cnvs_df_M10, keep.extra.columns=T)
+
+#without_name <- cnvs[is.na(seqnames(cnvs))]
+cnvs_M3<-fixRangesOrder(cnvs_M3, lens, ordr=lens$seqname)
+cnvs_M10<-fixRangesOrder(cnvs_M10, lens, ordr=lens$seqname)
+
+genes_to_display <- c("TraesCS6D02G366600", "TraesCS6D02G400000", "TraesCS6D02G375500", "TraesCS6D02G395100", "TraesCS6D02G401400")
+
+to_ignore <- c("WATDE0009", "WATDE0039",  "WATDE0056", "WATDE0060" ,  "WATDE0090")
+
+cnvs_M10 <- cnvs_M10[cnvs_M10$line %in% setdiff(unique(cnvs_M10$line), to_ignore) ]
+cnvs_M3 <- cnvs_M3[cnvs_M3$line %in% setdiff(unique(cnvs_M3$line), to_ignore) ]
+
+filled_M3  <- fillAllCNVsAroundGenes(cnvs_M3, gff[gff$type=="gene"], mc.cores = 4)
+
+#filled <- filled[filled$line %in% setdiff(unique(filled$line), to_ignore) ]
+
+# gene_to_show <- "TraesCS1B02G049300"
+# region_1B <- gff[gff$gene_id %in% c(gene_to_show)] 
+# region_1B <- flank(region_1B, 5000, both=TRUE)
+
+
+sample_lines <- c(
+    "WATDE0663", "WATDE0721", "WATDE0444", "WATDE0057", "WATDE0687", "WATDE0632", "WATDE1023", 
+    "WATDE0544", "WATDE0079", "WATDE1046", "WATDE0759", "WATDE1009", "WATDE0944", "WATDE0038", "WATDE1017", "WATDE0926",
+    "WATDE0059", "WATDE0606", "WATDE0543", "WATDE0503", "WATDE1049", "WATDE0638", "WATDE0730", "WATDE0941", "WATDE1032", 
+    "WATDE1016", "WATDE0817", "WATDE0109", "WATDE0176", "WATDE0691", "WATDE0456", "WATDE0453", "WATDE1018", "WATDE0561", 
+    "WATDE0704", "WATDE0945", "WATDE0781", "WATDE0975", "WATDE0910")
+
+genes_to_display_regions <- gff[gff$gene_id %in% genes_to_display]
+genes_to_display_regions <- exetendGR(genes_to_display_regions, size=2000)
+
+first_gene <- genes_to_display_regions[1]
+#filled_lines_values <- subsetByOverlaps(cnvs, first_gene)
+#lines_with_changes <- unique(filled_lines_values[filled_lines_values$cnv_level != 1]$line)
+#sample_lines <-  sample(lines_with_changes, 20)
+region_copy_M3 <- countCNVsPerRegion(cnvs_df_M3)
+region_copy_M10 <- countCNVsPerRegion(cnvs_df_M10)
+````
+
+The analysis  corresponds only to the values for the second part of chromosome 6D. 
+One of the assumptions that we have is that CNVs are more likely to be true if they appear on more than one line. 
+Hence, I look at the distribution to see how many unique events we can observe. 
+Half of the event are unique, this may be rare events or noise. 
+
+
+```{r,message=FALSE, echo=FALSE, fig.width=7, fig.height=3,  warning=FALSE, results='asis'}
+p1 <- plotHistogram(region_copy_M3, column="n", title_prefix="Max Gap: 3 ",trim_range = T)
+p2 <- plotHistogram(region_copy_M3[region_copy_M3$n>1,], column="n", title_prefix="Max Gap: 3 ",trim_range = F,binwidth = 1) + coord_cartesian(xlim=c(0,50))
+multiplot(plotlist= list(p1,p2), cols = 2)
+```
+
+Another general validation is the length of the deletions. Very long deletions (over 20,000bp) are not detected yet. 
+This is because the current version does not cross across genes that are farther than 2,000bp (but the next iteretion will).
+The expectation is that events will be longer than 200bp, as events of a single window are more prone to be noisy. 
+Again, we have 75% of the events containing more than individual window.    
+
+```{r,message=FALSE, echo=FALSE, fig.width=7, fig.height=3,  warning=FALSE, results='asis'}
+cnvs_df_M3$length <- cnvs_df_M3$end - cnvs_df_M3$start
+p1 <- plotHistogram(cnvs_df_M3, column = "length", binwidth=200)
+p2 <- plotHistogram(cnvs_df_M3, column = "length", binwidth=200) + coord_cartesian(xlim = c(0,15000)) 
+multiplot(plotlist= list(p1,p2), cols = 2)
+```
+
+## Exploring some events. 
+
+To understand detail how the CNV detection algorithm is behaving, we plotted the normalised coverage and the stiched deletion events. 
+The plot contains a couple of horizontal lines, definding the maximum variation in a window that can be considered as reliable. 
+This is a range between $(0.1,0.9)$. 
+The shadow area represents the $2.5\sigma$ confidence interval. 
+The regions where the shadow is above the line represent windows with low confidence, hence those windows are not used in this version of the analysis. 
+To improve the analysis, we need to get the alignments of only the reads that have single mapping. 
+
+On this example, from the region between ```4.4Mbp``` to ```4.5Mbp``` of ```chr6D_part2```, containing 6 genes, we can already observe some intresting examples.
+
+
+1. ```WATDE0687```  Has some small duplications,  but some candidates may be longer, but they go over the noisy areas. 
+2. ```WATDE0057``` There may be a longer  deletion over ```TraesCS6D02G366500``` and just before ```TraesCS6D02G367000```, but again,t hey fall in patches of nosiy coverage. 
+3. Lines ```WATDE0038``` and ```WATDE0456``` May be a single long deletion event. But some regions seem to have enough coverage to go over the threshold 
+
+
+
+
+```{r,  message=FALSE, echo=FALSE, fig.width=7, fig.height=6,  warning=FALSE, results='asis'}
+#plotDeletionsInRegion(cnvs, genes_to_display_regions[2], lines=sample_lines)
+lines_per_plot <- 4
+regions_test <- read.csv("6d_regions_to_test.csv")
+regions_test <- makeGRangesFromDataFrame(regions_test)
+
+i <- 1
+
+lines_j <- c("WATDE0687", "WATDE0057", "WATDE0759", "WATDE0038", "WATDE0456")
+
+p1 <- plotRegionScatterLines(covs_db, gff, 
+	regions_test[i], 
+	lines=lines_j, 
+	stiched.cnv = filled_M3, 
+	show.ribons=T, 
+	norm_cov_range=c(0,3 ))
+print(p1)
+
+
+# for(i in seq(1, length(regions_test))){
+#     print(plotDeletionsInRegion(filled_M3, regions_test[i], lines=sample_lines))
+#     for(j in seq(1,  length(sample_lines)/lines_per_plot ) ){
+
+#         first_line <- j * lines_per_plot
+#         last_line  <- first_line + lines_per_plot
+#         last_line <- ifelse(last_line > length(sample_lines), length(sample_lines), last_line)
+#         lines_j <- sample_lines[seq(first_line, last_line)]  
+#         p1 <- plotRegionScatterLines(covs_db, gff, 
+#             regions_test[i], 
+#             lines=lines_j, 
+#             stiched.cnv = filled_M3, 
+#             show.ribons=T, 
+#             norm_cov_range=c(0,4 ))
+#         print(p1)
+#     }
+
+#}
+
+```
+
+\newpage
+
+The region from ```8.4Mbp``` to ```8.5Mbp``` is more noisy, most of the windows are excluded.
+However, we can still have a couple of conclusions from this reagion.
+
+1. Line ```WATDE0057``` probably has a duplication of ```TraesCS6D02G375400``` and ```TraesCS6D02G3753```. 
+   A few of the windows have enough quality. 
+2. Lines ```WATDE1017```, ```WATDE0038``` and ```WATDE1017``` seem to have deletions. 
+   
+
+```{r,  message=FALSE, echo=FALSE, fig.width=7, fig.height=6,  warning=FALSE, results='asis'}
+lines_j <- c("WATDE0057", "WATDE0079", "WATDE0038", "WATDE1017")
+i<-2
+p1 <- plotRegionScatterLines(covs_db, gff, 
+	regions_test[i], 
+	lines=lines_j, 
+	stiched.cnv = filled_M3, 
+	show.ribons=T, 
+	norm_cov_range=c(0,4 ))
+print(p1)
+
+```
+
+
+\newpage
+
+Finally, the region between ```20.1Mbp``` and ```20.2Mbp``` has mostly windows that can be used to find CNVs. 
+
+1. ```WATDE1023``` Has a couple of small deletions on gene ```TraesCS6D02G401700```
+2. ```WATDE1017```  and ```WATDE1018``` are likelky to have a long duplication, but some noisy windows break it. Or it may be real small duplications
+3. ```WATDE0910``` has a  duplication over ```TraesCS6D02G402000```. 
+
+```{r,  message=FALSE, echo=FALSE, fig.width=7, fig.height=6,  warning=FALSE, results='asis'}
+lines_j <- c("WATDE1023", "WATDE1017", "WATDE1018", "WATDE0910")
+i<-5
+p1 <- plotRegionScatterLines(covs_db, gff, 
+	regions_test[i], 
+	lines=lines_j, 
+	stiched.cnv = filled_M3, 
+	show.ribons=T, 
+	norm_cov_range=c(0,3 ))
+print(p1)
+
+```
+
+
