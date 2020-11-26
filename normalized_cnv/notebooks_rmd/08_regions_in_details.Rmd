@@ -62,10 +62,14 @@ genes_to_display <- c("TraesCS6D02G366600", "TraesCS6D02G400000", "TraesCS6D02G3
 
 to_ignore <- c("WATDE0009", "WATDE0039",  "WATDE0056", "WATDE0060" ,  "WATDE0090")
 
+
 cnvs_M10 <- cnvs_M10[cnvs_M10$line %in% setdiff(unique(cnvs_M10$line), to_ignore) ]
 cnvs_M3 <- cnvs_M3[cnvs_M3$line %in% setdiff(unique(cnvs_M3$line), to_ignore) ]
 
+gff6B <- gff[seqnames(gff) == "chr6B_part2" & gff$type == "gene"]
+
 filled_M3  <- fillAllCNVsAroundGenes(cnvs_M3, gff[gff$type=="gene"], mc.cores = 4)
+filled_M10  <- fillAllCNVsAroundGenes(cnvs_M10, gff6B, mc.cores = 4)
 
 #filled <- filled[filled$line %in% setdiff(unique(filled$line), to_ignore) ]
 
