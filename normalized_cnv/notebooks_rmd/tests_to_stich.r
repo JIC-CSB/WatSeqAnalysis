@@ -88,3 +88,46 @@ mini_test
 test_stiched
 autoplot(test_stiched, aes(fill=cnv_level))
 autoplot(mini_test, aes(fill=cnv_level))
+
+filled_1Bpart2 <- read.csv("/Users/ramirezr/Documents/WatSeq/Deletions/20200724/200bp/long_tables/cnv_out_M10/M10_cnv.chr1B_part2.filled.csv.gz")
+filled_1Bpart2 <- makeGRangesFromDataFrame(filled_1Bpart2,keep.extra.columns = T)
+stiched_1Bpart2 <- stichAllCnvLevel(filled_1Bpart2,mc.cores=1)
+
+test_line <- "WATDE0009"
+stichCnvLevel <- function(filled, line = "WATDE0456"){
+  filled_sorted <- filled[filled$line == line]
+  filled_sorted<- sort(filled_sorted)
+  last <- filled_sorted[1,]  
+  ret <- filled_sorted[0,]
+  current <- NULL 
+  i <- 0
+  
+  missing_cnv_level <- filled_sorted[is.na( filled_sorted$cnv_level) ]
+  filled_sorted <- filled_sorted[!is.na( filled_sorted$cnv_level) ]
+  
+  if(length(missing_cnv_level)){
+    print("MISSING:")
+    print(missing_cnv_level)
+  }
+  
+  tryCatch({
+    for(i in seq(1, length(filled_sorted))){
+      current = filled_sorted[i,]
+    
+      if(as.character(seqnames(current)[1]) != as.character(seqnames(last)[1]) || current$cnv_level != last$cnv_level){
+        ret[length(ret)+1,] <- last
+        last <- current
+      }else{
+        end(last) <- end(current)
+      }
+    }
+  },  error=function(e){
+    print(i)
+    print(current)
+    print(last)
+  })
+  ret[nrow(ret)+1,] <- last
+  ret$norm_cov <- NULL
+  ret
+}
+test_stich <- stichCnvLevel(filled_1Bpart2, line = test_line)
