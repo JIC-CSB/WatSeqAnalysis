@@ -35,6 +35,29 @@ The normalization goes both ways, by sample and by window. This is based on the 
 
 As we have 3 window sizes, the script ```submit_deletions.sh``` is used to submit each window as an array. 
 
+### Preapring another filter 
+
+Create a ```.genome``` file:
+
+```
+gunzip -c Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz | grep "##sequence-region" | awk '{print $2"\t"$4}' > Triticum_aestivum.IWGSC.41.parts.tidy.genome
+```
+
+
+Extract BED file only with the genes: 
+
+```
+gunzip -c Triticum_aestivum.IWGSC.41.parts.tidy.gff3.gz | grep IWGSC | grep ID=gene | awk '{print $1"\t"$4"\t"$5}' > Triticum_aestivum.IWGSC.41.parts.tidy.genes.bed
+```
+
+
+Get the expanded bed file using ```bedtools slop``` 
+
+
+```
+bedtools slop -g Triticum_aestivum.IWGSC.41.parts.tidy.genome -b 2000 -i Triticum_aestivum.IWGSC.41.parts.tidy.genes.bed | bedtools merge -i - > Triticum_aestivum.IWGSC.41.parts.tidy.genes.2k.merged.bed
+```
+
 
 
 
